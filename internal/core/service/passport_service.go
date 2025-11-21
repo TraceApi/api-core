@@ -142,3 +142,36 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 
 	return passport, nil
 }
+
+func (s *passportService) GetPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {
+	cacheKey := fmt.Sprintf("passport:%s", id.String())
+
+	// 1. FAST PATH: Check Redis
+	cachedJSON, err := s.cache.Get(ctx, cacheKey)
+	if err == nil {
+		// Cache Hit! Unmarshal and return.
+		var p domain.Passport
+		if jsonErr := json.Unmarshal([]byte(cachedJSON), &p); jsonErr == nil {
+			return &p, nil
+		}
+		// If unmarshal fails, we ignore the cache and hit the DB (Auto-repair)
+	}
+
+	// 2. SLOW PATH: Hit Postgres
+	passport, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. FILL CACHE: Save for next time
+	// We cache for 1 hour (or longer, since passports are immutable-ish)
+	if jsonBytes, jsonErr := json.Marshal(passport); jsonErr == nil {
+		// Run in goroutine so we don't block the response
+		go func() {
+			// Create a detached context so the cache set doesn't fail if the HTTP request cancels
+			_ = s.cache.Set(context.Background(), cacheKey, string(jsonBytes), 1*time.Hour)
+		}()
+	}
+
+	return passport, nil
+}

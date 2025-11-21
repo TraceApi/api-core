@@ -51,3 +51,20 @@ func (r *RedisStore) SetIdempotency(ctx context.Context, hash string, passportID
 	// TTL = 24 hours. After that, we allow a duplicate to be created (or logic resets).
 	return r.client.Set(ctx, "idempotency:"+hash, passportID, 24*time.Hour).Err()
 }
+
+// Get retrieves a value by key. Returns ErrCacheMiss if not found.
+func (r *RedisStore) Get(ctx context.Context, key string) (string, error) {
+	val, err := r.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return "", ErrCacheMiss
+	}
+	if err != nil {
+		return "", err
+	}
+	return val, nil
+}
+
+// Set stores a value with a TTL (Time To Live).
+func (r *RedisStore) Set(ctx context.Context, key string, value string, ttl time.Duration) error {
+	return r.client.Set(ctx, key, value, ttl).Err()
+}
