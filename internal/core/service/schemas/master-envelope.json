@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.trace-stack.io/schemas/master-envelope.json",
+  "title": "TraceStack Master Passport Envelope",
+  "description": "The standardized wrapper for all ESPR-compliant Digital Product Passports.",
+  "type": "object",
+  "required": ["passportId", "status", "productCategory", "issuanceDate", "manufacturer", "payload"],
+  "properties": {
+    "passportId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The internal immutable UUID for this record."
+    },
+    "publicUrl": {
+      "type": "string",
+      "format": "uri",
+      "description": "The resolved URL encoded in the QR code (e.g., https://tapi.eu/r/uuid)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["DRAFT", "PUBLISHED", "REVOKED"],
+      "default": "DRAFT"
+    },
+    "productCategory": {
+      "type": "string",
+      "enum": ["BATTERY_INDUSTRIAL", "TEXTILE_APPAREL", "CONSUMER_ELECTRONIC"],
+      "description": "Determines which sub-schema validates the 'payload' field."
+    },
+    "manufacturer": {
+      "type": "object",
+      "required": ["name", "dunsNumber", "country"],
+      "properties": {
+        "name": { "type": "string" },
+        "dunsNumber": { "type": "string", "description": "The Data Universal Numbering System ID" },
+        "country": { "type": "string", "minLength": 2, "maxLength": 2, "description": "ISO 3166-1 alpha-2 code (e.g., DE, CN)" }
+      }
+    },
+    "issuanceDate": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "description": "The polymorphic data container. Validated against the specific product category schema."
+    }
+  }
+}

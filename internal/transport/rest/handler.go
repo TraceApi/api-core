@@ -1,0 +1,74 @@
+/*
+ * Copyright (c) 2025 TraceApi
+ *
+ * This source code is licensed under the Business Source License 1.1.
+ *
+ * Change Date: 2029-11-20
+ * Change License: AGPL-3.0
+ */
+
+package rest
+
+import (
+	"encoding/json"
+	"io"
+	"net/http"
+
+	"github.com/TraceApi/api-core/internal/core/domain"
+	"github.com/TraceApi/api-core/internal/core/ports"
+	"github.com/go-chi/chi/v5"
+)
+
+type PassportHandler struct {
+	service ports.PassportService
+}
+
+func NewPassportHandler(s ports.PassportService) *PassportHandler {
+	return &PassportHandler{service: s}
+}
+
+// RegisterRoutes wires up the endpoints to the router
+func (h *PassportHandler) RegisterRoutes(r chi.Router) {
+	r.Post("/passports", h.CreatePassport)
+}
+
+// CreatePassport handles POST /passports?category=BATTERY_INDUSTRIAL
+func (h *PassportHandler) CreatePassport(w http.ResponseWriter, r *http.Request) {
+	// 1. Parse Query Param for Category
+	catParam := r.URL.Query().Get("category")
+	if catParam == "" {
+		http.Error(w, "missing 'category' query parameter", http.StatusBadRequest)
+		return
+	}
+	category := domain.ProductCategory(catParam)
+
+	// 2. Mock Authentication (Phase 4 will replace this with JWT parsing)
+	// For now, we assume the manufacturer ID comes from a header or context
+	manufacturerID := r.Header.Get("X-Manufacturer-ID")
+	if manufacturerID == "" {
+		manufacturerID = "demo-manufacturer-001" // Fallback for dev
+	}
+
+	// 3. Read Body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// 4. Call Service
+	passport, err := h.service.CreatePassport(r.Context(), manufacturerID, category, body)
+	if err != nil {
+		// In a real app, we would check strictly if it's a validation error vs system error
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// 5. Respond
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(passport); err != nil {
+		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	}
+}

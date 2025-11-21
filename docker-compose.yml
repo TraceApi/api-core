@@ -1,0 +1,60 @@
+services:
+  # --- The App ---
+  api-ingest:
+    build:
+      context: .
+      dockerfile: deploy/ingest.Dockerfile
+    container_name: trace_ingest
+    ports:
+      - "8080:8080"
+    environment:
+      # Note: "trace_db" matches the container_name/service name below
+      - DATABASE_URL=postgres://trace_user:trace_password@trace_db:5432/trace_core?sslmode=disable
+      - REDIS_ADDR=trace_cache:6379
+      - PORT=8080
+    depends_on:
+      - postgres
+    networks:
+      - trace_net
+
+  # --- Infrastructure ---
+  postgres:
+    image: postgres:16-alpine
+    container_name: trace_db
+    environment:
+      POSTGRES_USER: trace_user
+      POSTGRES_PASSWORD: trace_password
+      POSTGRES_DB: trace_core
+    ports:
+      - "5432:5432"
+    volumes:
+      - trace_pg_data:/var/lib/postgresql/data
+    networks:
+      - trace_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: trace_cache
+    ports:
+      - "6379:6379"
+    networks:
+      - trace_net
+
+  minio:
+    image: minio/minio
+    container_name: trace_blob
+    environment:
+      MINIO_ROOT_USER: minio_admin
+      MINIO_ROOT_PASSWORD: minio_password
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - trace_net
+
+volumes:
+  trace_pg_data:
+
+networks:
+  trace_net:

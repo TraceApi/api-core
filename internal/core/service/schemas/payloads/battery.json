@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://api.trace-stack.io/schemas/payloads/battery.json",
+  "title": "Battery Passport Payload",
+  "type": "object",
+  "required": ["batteryModel", "chemistry", "ratedCapacity", "carbonFootprint", "materialComposition"],
+  "properties": {
+    "batteryModel": { "type": "string" },
+    "serialNumber": { "type": "string" },
+    "manufacturingPlace": { "type": "string" },
+    "chemistry": {
+      "type": "string",
+      "enum": ["LITHIUM_ION", "LITHIUM_IRON_PHOSPHATE", "NICKEL_METAL_HYDRIDE", "LEAD_ACID"],
+      "description": "Chemistry as defined in Annex VI"
+    },
+    "ratedCapacity": {
+      "type": "number",
+      "description": "Capacity in Ah (Ampere-hours) at standard conditions."
+    },
+    "voltage": {
+      "type": "number",
+      "description": "Nominal voltage in V."
+    },
+    "weight": {
+      "type": "number",
+      "description": "Weight in kg."
+    },
+    "carbonFootprint": {
+      "type": "object",
+      "required": ["totalCarbonFootprint", "shareOfRenewables"],
+      "properties": {
+        "totalCarbonFootprint": { 
+          "type": "number", 
+          "description": "kg CO2 eq/kWh over lifecycle" 
+        },
+        "shareOfRenewables": { "type": "number", "minimum": 0, "maximum": 100 },
+        "declarationUrl": { "type": "string", "format": "uri" }
+      }
+    },
+    "materialComposition": {
+      "type": "array",
+      "description": "Critical Raw Materials (CRM) declaration (Cobalt, Lithium, Nickel, Lead)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "material": { "type": "string" },
+          "massPercentage": { "type": "number" },
+          "recycledContentPercentage": { "type": "number" }
+        }
+      }
+    },
+    "disassemblyInstructions": {
+      "type": "object",
+      "description": "Restricted Access Data for Recyclers",
+      "properties": {
+        "documentUrl": { "type": "string", "format": "uri" },
+        "safetyMeasures": { "type": "string" },
+        "toolsRequired": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}
