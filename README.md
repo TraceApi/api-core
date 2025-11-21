@@ -3,19 +3,37 @@
 
 #### Project structure
 
-api-core/
-├── cmd/                    # Entry points (Main applications)
-│   ├── api-ingest/         # The write-heavy API for manufacturers
-│   └── api-resolver/       # The read-heavy API for QR codes/Consumers
-├── internal/               # Private application code (The Business Logic)
-│   ├── core/               # Domain entities (Passport, Event, Scan)
-│   ├── platform/           # Infrastructure (Postgres, Redis, S3)
-│   └── service/            # Application logic (PassportService, Auth)
-├── pkg/                    # Public libraries (Safe to import by others)
-│   ├── schema/             # The JSON Schemas we just defined
-│   └── validator/          # Shared validation logic
-├── deploy/                 # IaC (Docker, Terraform, K8s charts)
-├── web/                    # The Next.js Frontend (The Resolver UI)
-├── go.mod                  # Go Module definition
-├── Makefile                # The Command Center
-└── docker-compose.yml      # Local Dev Environment
+```
+.
+├── cmd/
+│   ├── api-ingest/
+│   └── api-resolver/
+├── deploy/
+├── internal/
+│   ├── core/
+│   │   ├── domain/
+│   │   ├── ports/
+│   │   └── service/
+│   ├── platform/
+│   │   ├── cache/
+│   │   └── storage/
+│   └── transport/
+│       └── rest/
+├── schemas/
+├── docker-compose.yml
+├── go.mod
+├── LICENSE
+├── Makefile
+└── README.md
+```
+
+
+## License
+
+This project is licensed under the **Business Source License 1.1 (BSL)**.
+
+* **Free Use:** You can use this code for development, testing, and personal projects.
+* **Commercial Use:** Running this in production (making money from it) requires a commercial license.
+* **Open Source Promise:** On **November 21, 2029**, this code automatically converts to **AGPLv3** (Open Source).
+
+For commercial licensing, contact: license@traceapi.eu

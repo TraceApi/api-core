@@ -1,0 +1,48 @@
+Business Source License 1.1
+
+Parameters
+
+Licensor:                 Alessandro Faranda Gancio (dba TraceApi)
+Licensed Work:            The TraceApi api-core software and associated documentation.
+Change Date:              2027-11-21
+Change License:           GNU Affero General Public License v3.0 (AGPL-3.0) or later.
+Additional Use Grant:     You may make use of the Licensed Work, provided that you 
+                          may not use the Licensed Work for a Production Purpose.
+
+"Production Purpose" means using the Licensed Work to provide a service to third 
+parties, or using the Licensed Work for internal business operations where the 
+software processes real-world data or is relied upon for business continuity. 
+Personal use, development, testing, and demonstration use are permitted.
+
+-------------------------------------------------------------------------
+
+Terms
+
+The Licensor hereby grants you the right to copy, modify, create derivative works, 
+redistribute, and make use of the Licensed Work for any use other than a Production 
+Purpose.
+
+If you wish to use the Licensed Work for a Production Purpose, you must obtain a 
+commercial license from the Licensor.
+
+On the Change Date, the Licensor hereby grants you a license under the Change 
+License to the Licensed Work, as if the Licensed Work were open source software 
+released under the Change License.
+
+-------------------------------------------------------------------------
+
+Definitions
+
+"Licensor" means the copyright owner or entity authorized by the copyright owner 
+that is granting the License.
+
+"Licensed Work" means the source code, documentation, and other materials made 
+available by the Licensor under this License.
+
+"Change Date" means the date on which the Licensed Work becomes available under 
+the Change License.
+
+"Change License" means the open source license specified in the Parameters.
+
+"Additional Use Grant" means the additional permissions granted to you by the 
+Licensor in the Parameters.
