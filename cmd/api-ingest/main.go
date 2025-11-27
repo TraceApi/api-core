@@ -60,6 +60,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
 
 	// Public Routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -74,16 +75,6 @@ func main() {
 	})
 
 	log.Info("Starting server", "port", cfg.Port)
-	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(60 * time.Second))
-
-	// Mount API routes
-	r.Route("/v1", func(r chi.Router) {
-		passportHandler.RegisterRoutes(r)
-	})
-
-	// 5. Start Server
-	log.Info("TraceApi Ingest Server starting", "port", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
 		log.Error("Server failed", "error", err)
 	}

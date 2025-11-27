@@ -38,9 +38,16 @@ func TestFullPassportLifecycle(t *testing.T) {
 
 	// 3. Define the Payload
 	payload := map[string]interface{}{
-		"batteryModel": "Integration Test Pack",
-		"chemistry":    "LFP",
-		"capacity":     100,
+		"batteryModel":  "Integration Test Pack",
+		"chemistry":     "LITHIUM_IRON_PHOSPHATE",
+		"ratedCapacity": 100,
+		"carbonFootprint": map[string]interface{}{
+			"totalCarbonFootprint": 50.5,
+			"shareOfRenewables":    90,
+		},
+		"materialComposition": []map[string]interface{}{
+			{"material": "Lithium", "massPercentage": 5},
+		},
 	}
 	payloadBytes, _ := json.Marshal(payload)
 

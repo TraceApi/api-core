@@ -63,7 +63,12 @@ func main() {
 	// For massive DDoS, rely on Cloudflare/WAF.
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 
-	// Mount Public Routes
+	// Public Routes
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
 	handler.RegisterResolverRoutes(r)
 
 	// 5. Start
