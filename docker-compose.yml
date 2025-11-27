@@ -1,38 +1,4 @@
 services:
-  # --- The App ---
-  api-ingest:
-    build:
-      context: .
-      dockerfile: deploy/ingest.Dockerfile
-    container_name: trace_ingest
-    ports:
-      - "8080:8080"
-    environment:
-      # Note: "trace_db" matches the container_name/service name below
-      - DATABASE_URL=postgres://trace_user:trace_password@trace_db:5432/trace_core?sslmode=disable
-      - REDIS_ADDR=trace_cache:6379
-      - PORT=8080
-    depends_on:
-      - postgres
-    networks:
-      - trace_net
-
-  api-resolver:
-    build:
-      context: .
-      dockerfile: deploy/resolver.Dockerfile
-    container_name: trace_resolver
-    ports:
-      - "8081:8081" # External port 8081 maps to container 8081
-    environment:
-      - DATABASE_URL=postgres://trace_user:trace_password@trace_db:5432/trace_core?sslmode=disable
-      - REDIS_ADDR=trace_cache:6379
-      - PORT=8081
-    depends_on:
-      - postgres
-    networks:
-      - trace_net
-
   # --- Infrastructure ---
   postgres:
     image: postgres:16-alpine

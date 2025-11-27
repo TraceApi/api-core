@@ -11,12 +11,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
-	"os"
+	"time"
 
+	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/service"
 	"github.com/TraceApi/api-core/internal/platform/cache"
+	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	"github.com/go-chi/chi/v5"
@@ -26,43 +27,43 @@ import (
 
 func main() {
 	// 1. Config
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable"
-	}
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "localhost:6379"
-	}
+	cfg := config.Load()
+	log := logger.New(cfg.LogLevel, cfg.IsProduction())
 
 	// 2. Infrastructure
 	ctx := context.Background()
-	dbPool, err := pgxpool.New(ctx, dbURL)
+	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("DB Connection failed: %v", err)
+		log.Error("DB Connection failed", "error", err)
+		return
 	}
 	defer dbPool.Close()
 
-	redisStore := cache.NewRedisStore(redisAddr)
+	redisStore := cache.NewRedisStore(cfg.RedisAddr)
 
 	// 3. Wiring (Identical to Ingest, but we use different handlers)
 	repo := postgres.NewPassportRepository(dbPool)
-	svc, _ := service.NewPassportService(repo, redisStore) // Error ignored for brevity in snippet
+	svc, err := service.NewPassportService(repo, redisStore, log)
+	if err != nil {
+		log.Error("Failed to initialize service", "error", err)
+		return
+	}
 
-	handler := rest.NewResolverHandler(svc)
+	handler := rest.NewResolverHandler(svc, log)
 
 	// 4. Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.Timeout(60 * time.Second))
 
 	// Mount Public Routes
 	handler.RegisterResolverRoutes(r)
 
 	// 5. Start
 	port := ":8081" // Note: Different port than Ingest (8080)
-	log.Printf("TraceApi Resolver Server starting on %s", port)
+	log.Info("TraceApi Resolver Server starting", "port", port)
 	if err := http.ListenAndServe(port, r); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		log.Error("Server failed", "error", err)
 	}
 }

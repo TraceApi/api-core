@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: TraceApi Core
+  description: API for creating and resolving Digital Product Passports.
+  version: 1.0.0
+  contact:
+    name: TraceApi Support
+    email: support@traceapi.eu
+  license:
+    name: BSL 1.1
+    url: https://mariadb.com/bsl11/
+servers:
+  - url: http://localhost:8080/v1
+    description: Ingest API (Local)
+  - url: http://localhost:8081
+    description: Resolver API (Local)
+
+paths:
+  /passports:
+    post:
+      summary: Create a new Product Passport
+      description: Creates a new passport with the given payload. Idempotent based on payload hash.
+      operationId: createPassport
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+            enum: [BATTERY_INDUSTRIAL, TEXTILE_APPAREL]
+          required: true
+          description: The product category for schema validation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: The raw JSON payload conforming to the category schema.
+      responses:
+        '201':
+          description: Passport created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Passport'
+        '400':
+          description: Invalid input or schema validation failed
+        '409':
+          description: Conflict (e.g. ID collision, though rare)
+        '500':
+          description: Internal server error
+
+  /r/{id}:
+    get:
+      summary: Resolve a Passport
+      description: Fetch the passport data by ID. Supports content negotiation (JSON or HTML).
+      operationId: resolvePassport
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The UUID of the passport.
+      responses:
+        '200':
+          description: Passport found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Passport'
+            text/html:
+              schema:
+                type: string
+        '404':
+          description: Passport not found
+
+  /r/{id}/qr:
+    get:
+      summary: Get QR Code
+      description: Returns a PNG QR code pointing to the resolver URL for this passport.
+      operationId: getQRCode
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            format: uuid
+          required: true
+      responses:
+        '200':
+          description: QR Code image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+
+components:
+  schemas:
+    Passport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        product_category:
+          type: string
+        status:
+          type: string
+          enum: [DRAFT, PUBLISHED, REVOKED]
+        manufacturer_id:
+          type: string
+        attributes:
+          type: object
+          description: The dynamic attributes of the passport.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

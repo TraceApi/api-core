@@ -11,13 +11,13 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
-	"os"
 	"time"
 
+	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/service"
 	"github.com/TraceApi/api-core/internal/platform/cache"
+	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	"github.com/go-chi/chi/v5"
@@ -26,39 +26,34 @@ import (
 )
 
 func main() {
-	// 1. Configuration (Env Vars)
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable"
-	}
-
-	redisAddr := os.Getenv("REDIS_ADDR")
-	if redisAddr == "" {
-		redisAddr = "trace_cache:6379"
-	}
+	// 1. Configuration
+	cfg := config.Load()
+	log := logger.New(cfg.LogLevel, cfg.IsProduction())
 
 	// 2. Database Connection
 	ctx := context.Background()
-	dbPool, err := pgxpool.New(ctx, dbURL)
+	dbPool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
-		log.Fatalf("Unable to connect to database: %v\n", err)
+		log.Error("Unable to connect to database", "error", err)
+		return
 	}
 	defer dbPool.Close()
 
 	// 2a. Initialize Cache
-	redisStore := cache.NewRedisStore(redisAddr)
+	redisStore := cache.NewRedisStore(cfg.RedisAddr)
 
 	// 3. Dependency Injection (Wiring)
 	// Repo -> Service -> Handler
 	passportRepo := postgres.NewPassportRepository(dbPool)
 
 	// Inject Cache into Service
-	passportSvc, err := service.NewPassportService(passportRepo, redisStore)
+	passportSvc, err := service.NewPassportService(passportRepo, redisStore, log)
 	if err != nil {
-		log.Fatalf("Failed to initialize service: %v", err)
+		log.Error("Failed to initialize service", "error", err)
+		return
 	}
 
-	passportHandler := rest.NewPassportHandler(passportSvc)
+	passportHandler := rest.NewPassportHandler(passportSvc, log)
 
 	// 4. Router Setup
 	r := chi.NewRouter()
@@ -72,9 +67,8 @@ func main() {
 	})
 
 	// 5. Start Server
-	port := ":8080"
-	log.Printf("TraceApi Ingest Server starting on %s", port)
-	if err := http.ListenAndServe(port, r); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	log.Info("TraceApi Ingest Server starting", "port", cfg.Port)
+	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
+		log.Error("Server failed", "error", err)
 	}
 }

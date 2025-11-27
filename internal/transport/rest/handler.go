@@ -11,7 +11,9 @@ package rest
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/TraceApi/api-core/internal/core/domain"
@@ -21,10 +23,11 @@ import (
 
 type PassportHandler struct {
 	service ports.PassportService
+	log     *slog.Logger
 }
 
-func NewPassportHandler(s ports.PassportService) *PassportHandler {
-	return &PassportHandler{service: s}
+func NewPassportHandler(s ports.PassportService, log *slog.Logger) *PassportHandler {
+	return &PassportHandler{service: s, log: log}
 }
 
 // RegisterRoutes wires up the endpoints to the router
@@ -60,8 +63,18 @@ func (h *PassportHandler) CreatePassport(w http.ResponseWriter, r *http.Request)
 	// 4. Call Service
 	passport, err := h.service.CreatePassport(r.Context(), manufacturerID, category, body)
 	if err != nil {
-		// In a real app, we would check strictly if it's a validation error vs system error
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.log.Error("failed to create passport", "error", err)
+
+		if errors.Is(err, domain.ErrInvalidInput) {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if errors.Is(err, domain.ErrConflict) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 

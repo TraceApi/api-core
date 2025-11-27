@@ -12,6 +12,7 @@ package rest
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -23,10 +24,11 @@ import (
 
 type ResolverHandler struct {
 	service ports.PassportService // We reuse the service for reading
+	log     *slog.Logger
 }
 
-func NewResolverHandler(s ports.PassportService) *ResolverHandler {
-	return &ResolverHandler{service: s}
+func NewResolverHandler(s ports.PassportService, log *slog.Logger) *ResolverHandler {
+	return &ResolverHandler{service: s, log: log}
 }
 
 func (h *ResolverHandler) RegisterResolverRoutes(r chi.Router) {
@@ -48,6 +50,7 @@ func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request
 	// (We will do that in the next step)
 	passport, err := h.service.GetPassport(r.Context(), uid)
 	if err != nil {
+		h.log.Warn("passport not found", "id", uid, "error", err)
 		http.Error(w, "Passport Not Found", http.StatusNotFound)
 		return
 	}
@@ -126,6 +129,7 @@ func (h *ResolverHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		h.log.Error("failed to generate qr", "error", err)
 		http.Error(w, "Failed to generate QR", http.StatusInternalServerError)
 		return
 	}

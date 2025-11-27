@@ -15,6 +15,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -40,12 +41,13 @@ type passportService struct {
 	cache    *cache.RedisStore
 	compiler *jsonschema.Compiler
 	schemas  map[domain.ProductCategory]*jsonschema.Schema
+	log      *slog.Logger
 }
 
 // Ensure interface implementation
 var _ ports.PassportService = (*passportService)(nil)
 
-func NewPassportService(repo ports.PassportRepository, cache *cache.RedisStore) (ports.PassportService, error) {
+func NewPassportService(repo ports.PassportRepository, cache *cache.RedisStore, log *slog.Logger) (ports.PassportService, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft2020
 
@@ -75,6 +77,7 @@ func NewPassportService(repo ports.PassportRepository, cache *cache.RedisStore) 
 			domain.CategoryBattery: batterySchema,
 			domain.CategoryTextile: textileSchema,
 		},
+		log: log,
 	}, nil
 }
 
@@ -105,16 +108,19 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 	// 2. Schema Validation
 	schema, exists := s.schemas[category]
 	if !exists {
-		return nil, fmt.Errorf("unsupported product category: %s", category)
+		s.log.Warn("unsupported product category", "category", category)
+		return nil, fmt.Errorf("%w: %s", domain.ErrInvalidInput, category)
 	}
 
 	var jsonInterface interface{}
 	if err := json.Unmarshal(payload, &jsonInterface); err != nil {
-		return nil, fmt.Errorf("invalid JSON format: %w", err)
+		s.log.Warn("invalid json format", "error", err)
+		return nil, fmt.Errorf("%w: invalid JSON", domain.ErrInvalidInput)
 	}
 
 	if err := schema.Validate(jsonInterface); err != nil {
-		return nil, fmt.Errorf("schema validation failed: %#v", err)
+		s.log.Warn("schema validation failed", "error", err)
+		return nil, fmt.Errorf("%w: schema validation failed", domain.ErrInvalidInput)
 	}
 
 	// 3. Construct Domain Entity
@@ -132,13 +138,15 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 
 	// 4. Save to Repository
 	if err := s.repo.Save(ctx, passport); err != nil {
-		return nil, fmt.Errorf("failed to persist passport: %w", err)
+		s.log.Error("failed to persist passport", "error", err)
+		return nil, fmt.Errorf("%w: failed to save", domain.ErrInternal)
 	}
 
 	// 5. Save to Idempotency Cache
 	// We do this LAST. If it fails, we log it but don't fail the request.
-	// Ideally, use a logger here. For now, we suppress the error.
-	_ = s.cache.SetIdempotency(ctx, payloadHash, passport.ID.String())
+	if err := s.cache.SetIdempotency(ctx, payloadHash, passport.ID.String()); err != nil {
+		s.log.Warn("failed to set idempotency key", "error", err)
+	}
 
 	return passport, nil
 }

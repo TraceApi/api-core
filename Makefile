@@ -17,6 +17,10 @@ run-ingest: ## Run the Ingest API locally
 run-resolver: ## Run the Resolver API locally
 	go run cmd/api-resolver/main.go
 
+db-init: ## Initialize the database schema (Manual migration for dev)
+	@echo "Initializing database..."
+	docker exec -i trace_db psql -U trace_user -d trace_core < internal/platform/storage/postgres/migrations/001_init_passports.sql
+
 db-migrate: ## Run database migrations (We will add the tool later)
 	@echo "Running migrations..."
 	# migrate -path internal/platform/db/migrations -database "postgresql://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable" up
