@@ -11,6 +11,12 @@ Before running the application manually, you should run the automated test suite
 go test ./...
 ```
 
+### Run Integration Tests
+Integration tests require the Docker infrastructure to be running (`make up`).
+```bash
+go test -tags=integration ./tests/integration/... -v
+```
+
 ### Run Specific Layers
 **Service Layer (Business Logic):**
 ```bash
