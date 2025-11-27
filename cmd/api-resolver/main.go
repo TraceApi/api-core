@@ -22,6 +22,7 @@ import (
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -56,6 +57,11 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
+
+	// Rate Limiting: 100 requests per minute per IP
+	// This protects the application layer from simple flooding.
+	// For massive DDoS, rely on Cloudflare/WAF.
+	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 
 	// Mount Public Routes
 	handler.RegisterResolverRoutes(r)

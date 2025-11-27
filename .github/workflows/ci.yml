@@ -1,0 +1,67 @@
+name: TraceApi Core CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      # Spin up ephemeral containers for Integration Tests
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trace_user
+          POSTGRES_PASSWORD: trace_password
+          POSTGRES_DB: trace_core
+        ports:
+          - 5432:5432
+        # Wait until DB is healthy
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.23'
+
+    - name: Install Dependencies
+      run: go mod download
+
+    - name: Install Migrate Tool
+      run: |
+        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+        sudo mv migrate /usr/local/bin/migrate
+
+    - name: Run Migrations
+      run: migrate -path internal/platform/storage/postgres/migrations -database "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable" up
+
+    - name: Verify Build
+      run: |
+        go build -v ./cmd/api-ingest
+        go build -v ./cmd/api-resolver
+
+    - name: Run Unit Tests
+      run: go test -v ./internal/...
+
+    - name: Run Integration Tests
+      # We pass the env vars to point to the service containers
+      env:
+        DATABASE_URL: "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable"
+        REDIS_ADDR: "localhost:6379"
+        JWT_SECRET: "ci-secret-key"
+      run: go test -v -tags=integration ./tests/integration/...
