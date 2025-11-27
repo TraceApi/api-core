@@ -18,6 +18,7 @@ import (
 
 	"github.com/TraceApi/api-core/internal/core/domain"
 	"github.com/TraceApi/api-core/internal/core/ports"
+	"github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -45,11 +46,12 @@ func (h *PassportHandler) CreatePassport(w http.ResponseWriter, r *http.Request)
 	}
 	category := domain.ProductCategory(catParam)
 
-	// 2. Mock Authentication (Phase 4 will replace this with JWT parsing)
-	// For now, we assume the manufacturer ID comes from a header or context
-	manufacturerID := r.Header.Get("X-Manufacturer-ID")
-	if manufacturerID == "" {
-		manufacturerID = "demo-manufacturer-001" // Fallback for dev
+	// 2. Get Manufacturer ID from Context (set by AuthMiddleware)
+	manufacturerID, ok := middleware.GetManufacturerID(r.Context())
+	if !ok {
+		// Should be caught by middleware, but safe guard here
+		http.Error(w, "unauthorized: missing manufacturer identity", http.StatusUnauthorized)
+		return
 	}
 
 	// 3. Read Body

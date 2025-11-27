@@ -11,6 +11,7 @@ type Config struct {
 	DatabaseURL string
 	RedisAddr   string
 	LogLevel    string
+	JWTSecret   string
 }
 
 // Load returns the application configuration from environment variables
@@ -21,6 +22,7 @@ func Load() *Config {
 		DatabaseURL: getEnv("DATABASE_URL", "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable"),
 		RedisAddr:   getEnv("REDIS_ADDR", "localhost:6379"),
 		LogLevel:    getEnv("LOG_LEVEL", "info"),
+		JWTSecret:   getEnv("JWT_SECRET", "super-secret-dev-key-do-not-use-in-prod"),
 	}
 }
 

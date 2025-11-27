@@ -7,6 +7,7 @@ services:
       POSTGRES_USER: trace_user
       POSTGRES_PASSWORD: trace_password
       POSTGRES_DB: trace_core
+      JWT_SECRET: ${JWT_SECRET:-super-secret-dev-key-do-not-use-in-prod}
     ports:
       - "5432:5432"
     volumes:

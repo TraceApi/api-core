@@ -36,6 +36,8 @@ paths:
             schema:
               type: object
               description: The raw JSON payload conforming to the category schema.
+      security:
+        - bearerAuth: []
       responses:
         '201':
           description: Passport created successfully
@@ -98,6 +100,11 @@ paths:
                 format: binary
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   schemas:
     Passport:
       type: object

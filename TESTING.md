@@ -24,6 +24,16 @@ go test ./internal/transport/rest/... -v
 
 ## 2. Manual Testing (Local Dev)
 
+### Authentication (New!)
+
+The Ingest API is now protected by JWT Authentication. You must generate a token to make requests.
+
+**Generate a Test Token:**
+```bash
+go run scripts/generate_token.go
+```
+This will output a valid `Bearer` token and a ready-to-use `curl` command.
+
 ### Start Infrastructure
 
 Start the PostgreSQL and Redis containers:
@@ -62,11 +72,16 @@ make run-resolver
 
 ### Scenario A: Create a Battery Passport (Success)
 
+**Prerequisite:** Generate a token first.
+```bash
+TOKEN=$(go run scripts/generate_token.go | grep "eyJ" | head -n 1)
+```
+
 **Request:**
 ```bash
 curl -X POST "http://localhost:8080/v1/passports?category=BATTERY_INDUSTRIAL" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -H "X-Manufacturer-ID: tesla-gigafactory-berlin" \
   -d '{
     "batteryModel": "Model Y Structural Pack",
     "chemistry": "LITHIUM_ION",

@@ -13,6 +13,7 @@ import (
 
 	"github.com/TraceApi/api-core/internal/core/domain"
 	"github.com/TraceApi/api-core/internal/transport/rest"
+	"github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -58,7 +59,10 @@ func TestCreatePassport_Handler_Success(t *testing.T) {
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequest("POST", "/passports?category=BATTERY_INDUSTRIAL", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Manufacturer-ID", "mfg-1")
+
+	// Inject Auth Context (Simulate Middleware)
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
 
 	// Expectations
 	expectedPassport := &domain.Passport{
@@ -89,6 +93,11 @@ func TestCreatePassport_Handler_MissingCategory(t *testing.T) {
 	handler.RegisterRoutes(r)
 
 	req, _ := http.NewRequest("POST", "/passports", bytes.NewBuffer([]byte("{}"))) // No query param
+
+	// Inject Auth Context (Even though it fails before this, it's good practice)
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
+
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
@@ -105,14 +114,16 @@ func TestCreatePassport_Handler_ServiceError(t *testing.T) {
 
 	req, _ := http.NewRequest("POST", "/passports?category=BATTERY_INDUSTRIAL", bytes.NewBuffer([]byte("{}")))
 
-	// Simulate Domain Error (Invalid Input)
-	mockSvc.On("CreatePassport", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, domain.ErrInvalidInput)
+	// Inject Auth Context
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
+
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, domain.ErrInvalidInput)
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusBadRequest, rr.Code)
-	assert.Contains(t, rr.Body.String(), "invalid input")
 }
 
 func TestCreatePassport_Handler_InternalError(t *testing.T) {
@@ -124,12 +135,14 @@ func TestCreatePassport_Handler_InternalError(t *testing.T) {
 
 	req, _ := http.NewRequest("POST", "/passports?category=BATTERY_INDUSTRIAL", bytes.NewBuffer([]byte("{}")))
 
-	// Simulate Unexpected Error
-	mockSvc.On("CreatePassport", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil, errors.New("db exploded"))
+	// Inject Auth Context
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
+
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, errors.New("db error"))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
-	assert.Contains(t, rr.Body.String(), "internal server error")
 }

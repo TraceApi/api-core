@@ -20,6 +20,7 @@ import (
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
 	"github.com/TraceApi/api-core/internal/transport/rest"
+	authMiddleware "github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -58,6 +59,21 @@ func main() {
 	// 4. Router Setup
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+
+	// Public Routes
+	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+	})
+
+	// Protected Routes
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware.AuthMiddleware(cfg.JWTSecret, log))
+		passportHandler.RegisterRoutes(r)
+	})
+
+	log.Info("Starting server", "port", cfg.Port)
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Timeout(60 * time.Second))
 
