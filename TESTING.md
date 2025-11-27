@@ -2,7 +2,29 @@
 
 Follow these steps to validate the TraceApi Core implementation.
 
-## 1. Start Infrastructure
+## 1. Automated Tests (Unit & Integration)
+
+Before running the application manually, you should run the automated test suite.
+
+### Run All Tests
+```bash
+go test ./...
+```
+
+### Run Specific Layers
+**Service Layer (Business Logic):**
+```bash
+go test ./internal/core/service/... -v
+```
+
+**Handler Layer (HTTP Logic):**
+```bash
+go test ./internal/transport/rest/... -v
+```
+
+## 2. Manual Testing (Local Dev)
+
+### Start Infrastructure
 
 Start the PostgreSQL and Redis containers:
 
@@ -12,15 +34,15 @@ make up
 
 Wait a few seconds for the database to be ready.
 
-## 2. Initialize Database
+### Initialize Database
 
-Apply the initial schema to the database:
+Apply the initial schema to the database using the migration tool:
 
 ```bash
-make db-init
+make db-migrate-up
 ```
 
-## 3. Run the Applications
+### Run the Applications
 
 You will need two terminal windows.
 
@@ -36,7 +58,7 @@ make run-resolver
 ```
 *Expected Output:* `{"time":"...","level":"INFO","msg":"TraceApi Resolver Server starting","port":"8081"}`
 
-## 4. Test Scenarios
+## 3. Test Scenarios
 
 ### Scenario A: Create a Battery Passport (Success)
 

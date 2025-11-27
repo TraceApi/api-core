@@ -23,7 +23,6 @@ import (
 
 	"github.com/TraceApi/api-core/internal/core/domain"
 	"github.com/TraceApi/api-core/internal/core/ports"
-	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/google/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -38,7 +37,7 @@ var textileSchemaRaw string
 
 type passportService struct {
 	repo     ports.PassportRepository
-	cache    *cache.RedisStore
+	cache    ports.CacheRepository
 	compiler *jsonschema.Compiler
 	schemas  map[domain.ProductCategory]*jsonschema.Schema
 	log      *slog.Logger
@@ -47,7 +46,7 @@ type passportService struct {
 // Ensure interface implementation
 var _ ports.PassportService = (*passportService)(nil)
 
-func NewPassportService(repo ports.PassportRepository, cache *cache.RedisStore, log *slog.Logger) (ports.PassportService, error) {
+func NewPassportService(repo ports.PassportRepository, cache ports.CacheRepository, log *slog.Logger) (ports.PassportService, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft2020
 
