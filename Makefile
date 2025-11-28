@@ -20,8 +20,6 @@ run-resolver: ## Run the Resolver API locally
 db-init: ## Initialize the database schema (Manual migration for dev)
 	@echo "Initializing database..."
 	docker exec -i trace_db psql -U trace_user -d trace_core < internal/platform/storage/postgres/migrations/000001_init_passports.up.sql
-	@echo "Applying storage_location migration..."
-	docker exec -i trace_db psql -U trace_user -d trace_core < internal/platform/storage/postgres/migrations/000002_add_storage_location.up.sql
 
 db-reset: ## Reset the database (DROP and Re-init)
 	@echo "Resetting database..."

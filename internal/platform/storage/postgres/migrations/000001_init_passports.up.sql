@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS passports (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
     published_at TIMESTAMP WITH TIME ZONE,
-    immutability_hash VARCHAR(256)
+    immutability_hash VARCHAR(256),
+    storage_location TEXT
 );
 
 -- Create an index on the JSONB column for speed
