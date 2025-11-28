@@ -20,6 +20,7 @@ import (
 	"github.com/TraceApi/api-core/internal/core/ports"
 	"github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type PassportHandler struct {
@@ -34,6 +35,7 @@ func NewPassportHandler(s ports.PassportService, log *slog.Logger) *PassportHand
 // RegisterRoutes wires up the endpoints to the router
 func (h *PassportHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/passports", h.CreatePassport)
+	r.Post("/passports/{id}/publish", h.PublishPassport)
 }
 
 // CreatePassport handles POST /passports?category=BATTERY_INDUSTRIAL
@@ -83,7 +85,30 @@ func (h *PassportHandler) CreatePassport(w http.ResponseWriter, r *http.Request)
 	// 5. Respond
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	if err := json.NewEncoder(w).Encode(passport); err != nil {
-		http.Error(w, "failed to encode response", http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(passport)
+}
+
+// PublishPassport handles POST /passports/{id}/publish
+func (h *PassportHandler) PublishPassport(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "invalid passport id", http.StatusBadRequest)
+		return
 	}
+
+	passport, err := h.service.PublishPassport(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrPassportAlreadyPublished) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		h.log.Error("failed to publish passport", "error", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(passport)
 }

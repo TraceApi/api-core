@@ -33,11 +33,34 @@ services:
     ports:
       - "9000:9000"
       - "9001:9001"
+    volumes:
+      - trace_blob_data:/data
+    networks:
+      - trace_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  createbuckets:
+    image: minio/mc
+    container_name: trace_init_buckets
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      until /usr/bin/mc alias set myminio http://minio:9000 minio_admin minio_password; do echo '...waiting...' && sleep 1; done;
+      /usr/bin/mc mb --ignore-existing --with-lock myminio/passports;
+      exit 0;
+      "
     networks:
       - trace_net
 
 volumes:
   trace_pg_data:
+  trace_blob_data:
 
 networks:
   trace_net:

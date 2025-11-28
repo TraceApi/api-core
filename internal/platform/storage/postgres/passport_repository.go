@@ -28,16 +28,17 @@ func (r *PostgresRepository) Save(ctx context.Context, p *domain.Passport) error
 	query := `
 		INSERT INTO passports (
 			id, product_category, status, manufacturer_id, manufacturer_name, 
-			attributes, created_at, updated_at, published_at, immutability_hash
+			attributes, created_at, updated_at, published_at, immutability_hash, storage_location
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			status = EXCLUDED.status,
 			attributes = EXCLUDED.attributes,
 			updated_at = EXCLUDED.updated_at,
 			published_at = EXCLUDED.published_at,
-			immutability_hash = EXCLUDED.immutability_hash;
+			immutability_hash = EXCLUDED.immutability_hash,
+			storage_location = EXCLUDED.storage_location;
 	`
 
 	// Handle nullable PublishedAt
@@ -57,12 +58,31 @@ func (r *PostgresRepository) Save(ctx context.Context, p *domain.Passport) error
 		p.UpdatedAt,
 		publishedAt,
 		p.ImmutabilityHash,
+		p.StorageLocation,
 	)
+	return err
+}
 
-	if err != nil {
-		return fmt.Errorf("failed to save passport: %w", err)
-	}
-	return nil
+func (r *PostgresRepository) Update(ctx context.Context, p *domain.Passport) error {
+	query := `
+		UPDATE passports SET
+			status = $2,
+			immutability_hash = $3,
+			published_at = $4,
+			storage_location = $5,
+			updated_at = $6
+		WHERE id = $1
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		p.ID,
+		p.Status,
+		p.ImmutabilityHash,
+		p.PublishedAt,
+		p.StorageLocation,
+		time.Now(),
+	)
+	return err
 }
 
 func (r *PostgresRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {

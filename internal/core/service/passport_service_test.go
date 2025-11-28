@@ -40,6 +40,20 @@ func (m *MockPassportRepository) FindByCategory(ctx context.Context, category do
 	return args.Get(0).([]*domain.Passport), args.Error(1)
 }
 
+func (m *MockPassportRepository) Update(ctx context.Context, passport *domain.Passport) error {
+	args := m.Called(ctx, passport)
+	return args.Error(0)
+}
+
+type MockBlobStorage struct {
+	mock.Mock
+}
+
+func (m *MockBlobStorage) UploadJSON(ctx context.Context, bucket string, key string, data []byte) (string, error) {
+	args := m.Called(ctx, bucket, key, data)
+	return args.String(0), args.Error(1)
+}
+
 type MockCacheRepository struct {
 	mock.Mock
 }
@@ -70,9 +84,10 @@ func TestCreatePassport_Success(t *testing.T) {
 	// Setup
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
+	mockBlob := new(MockBlobStorage)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, err := service.NewPassportService(mockRepo, mockCache, logger)
+	svc, err := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
 	assert.NoError(t, err)
 
 	ctx := context.Background()
@@ -114,9 +129,10 @@ func TestCreatePassport_InvalidSchema(t *testing.T) {
 	// Setup
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
+	mockBlob := new(MockBlobStorage)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, _ := service.NewPassportService(mockRepo, mockCache, logger)
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
 	ctx := context.Background()
 
 	// Invalid Payload (Missing required fields)
@@ -141,9 +157,10 @@ func TestCreatePassport_IdempotencyHit(t *testing.T) {
 	// Setup
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
+	mockBlob := new(MockBlobStorage)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, _ := service.NewPassportService(mockRepo, mockCache, logger)
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
 	ctx := context.Background()
 
 	existingID := uuid.New()
@@ -161,7 +178,43 @@ func TestCreatePassport_IdempotencyHit(t *testing.T) {
 	// Assertions
 	assert.NoError(t, err)
 	assert.Equal(t, existingID, passport.ID)
+	mockRepo.AssertExpectations(t)
+}
 
-	// Ensure Save was NEVER called
-	mockRepo.AssertNotCalled(t, "Save")
+func TestPublishPassport_Success(t *testing.T) {
+	// Setup
+	mockRepo := new(MockPassportRepository)
+	mockCache := new(MockCacheRepository)
+	mockBlob := new(MockBlobStorage)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
+	ctx := context.Background()
+
+	id := uuid.New()
+	passport := &domain.Passport{
+		ID:         id,
+		Status:     domain.StatusDraft,
+		Attributes: json.RawMessage(`{"foo":"bar"}`),
+	}
+
+	// Expectations
+	mockRepo.On("GetByID", ctx, id).Return(passport, nil)
+	mockBlob.On("UploadJSON", ctx, "passports", mock.Anything, mock.Anything).Return("s3://bucket/key", nil)
+	mockRepo.On("Update", ctx, mock.MatchedBy(func(p *domain.Passport) bool {
+		return p.Status == domain.StatusPublished && p.StorageLocation == "s3://bucket/key" && p.ImmutabilityHash != ""
+	})).Return(nil)
+
+	// Execute
+	published, err := svc.PublishPassport(ctx, id)
+
+	// Assertions
+	assert.NoError(t, err)
+	assert.Equal(t, domain.StatusPublished, published.Status)
+	assert.Equal(t, "s3://bucket/key", published.StorageLocation)
+	assert.NotEmpty(t, published.ImmutabilityHash)
+	assert.NotNil(t, published.PublishedAt)
+
+	mockRepo.AssertExpectations(t)
+	mockBlob.AssertExpectations(t)
 }

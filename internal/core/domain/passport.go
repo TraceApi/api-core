@@ -55,6 +55,7 @@ type Passport struct {
 	UpdatedAt        time.Time  `json:"updatedAt" db:"updated_at"`
 	PublishedAt      *time.Time `json:"publishedAt,omitempty" db:"published_at"`
 	ImmutabilityHash string     `json:"immutabilityHash,omitempty" db:"immutability_hash"` // SHA-256 of the Attributes when Published
+	StorageLocation  string     `json:"storageLocation,omitempty" db:"storage_location"`   // S3 URL
 }
 
 // --- The Polymorphic Payloads ---

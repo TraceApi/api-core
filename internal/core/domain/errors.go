@@ -12,6 +12,9 @@ var (
 	// ErrInvalidInput is returned when the input data is invalid.
 	ErrInvalidInput = errors.New("invalid input")
 
+	// ErrPassportAlreadyPublished is returned when trying to publish a passport that is already published.
+	ErrPassportAlreadyPublished = errors.New("passport already published")
+
 	// ErrInternal is returned when an unexpected error occurs.
 	ErrInternal = errors.New("internal error")
 )

@@ -13,4 +13,6 @@ type PassportService interface {
 	CreatePassport(ctx context.Context, manufacturerID string, category domain.ProductCategory, payload []byte) (*domain.Passport, error)
 
 	GetPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
+
+	PublishPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
 }

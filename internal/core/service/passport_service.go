@@ -36,17 +36,18 @@ var batterySchemaRaw string
 var textileSchemaRaw string
 
 type passportService struct {
-	repo     ports.PassportRepository
-	cache    ports.CacheRepository
-	compiler *jsonschema.Compiler
-	schemas  map[domain.ProductCategory]*jsonschema.Schema
-	log      *slog.Logger
+	repo      ports.PassportRepository
+	cache     ports.CacheRepository
+	blobStore ports.BlobStorage
+	compiler  *jsonschema.Compiler
+	schemas   map[domain.ProductCategory]*jsonschema.Schema
+	log       *slog.Logger
 }
 
 // Ensure interface implementation
 var _ ports.PassportService = (*passportService)(nil)
 
-func NewPassportService(repo ports.PassportRepository, cache ports.CacheRepository, log *slog.Logger) (ports.PassportService, error) {
+func NewPassportService(repo ports.PassportRepository, cache ports.CacheRepository, blobStore ports.BlobStorage, log *slog.Logger) (ports.PassportService, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft2020
 
@@ -69,9 +70,10 @@ func NewPassportService(repo ports.PassportRepository, cache ports.CacheReposito
 	}
 
 	return &passportService{
-		repo:     repo,
-		cache:    cache,
-		compiler: compiler,
+		repo:      repo,
+		cache:     cache,
+		blobStore: blobStore,
+		compiler:  compiler,
 		schemas: map[domain.ProductCategory]*jsonschema.Schema{
 			domain.CategoryBattery: batterySchema,
 			domain.CategoryTextile: textileSchema,
@@ -178,6 +180,50 @@ func (s *passportService) GetPassport(ctx context.Context, id uuid.UUID) (*domai
 			// Create a detached context so the cache set doesn't fail if the HTTP request cancels
 			_ = s.cache.Set(context.Background(), cacheKey, string(jsonBytes), 1*time.Hour)
 		}()
+	}
+
+	return passport, nil
+}
+
+func (s *passportService) PublishPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {
+	// 1. Fetch Passport
+	passport, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch passport: %w", err)
+	}
+
+	// 2. Check if already published
+	if passport.Status == domain.StatusPublished {
+		return nil, domain.ErrPassportAlreadyPublished
+	}
+
+	// 3. Marshal Attributes
+	payloadBytes, err := json.Marshal(passport.Attributes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal attributes: %w", err)
+	}
+
+	// 4. Calculate SHA-256 Hash
+	hash := sha256.Sum256(payloadBytes)
+	hashString := hex.EncodeToString(hash[:])
+
+	// 5. Upload to BlobStorage
+	key := fmt.Sprintf("passports/%s.json", passport.ID.String())
+	s3URL, err := s.blobStore.UploadJSON(ctx, "passports", key, payloadBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload to blob storage: %w", err)
+	}
+
+	// 6. Update Passport Struct
+	passport.Status = domain.StatusPublished
+	passport.ImmutabilityHash = hashString
+	passport.StorageLocation = s3URL
+	now := time.Now()
+	passport.PublishedAt = &now
+
+	// 7. Save to Repo
+	if err := s.repo.Update(ctx, passport); err != nil {
+		return nil, fmt.Errorf("failed to save published passport: %w", err)
 	}
 
 	return passport, nil

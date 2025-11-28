@@ -19,6 +19,7 @@ import (
 	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
+	"github.com/TraceApi/api-core/internal/platform/storage/s3"
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -42,9 +43,21 @@ func main() {
 
 	redisStore := cache.NewRedisStore(cfg.RedisAddr)
 
+	// Initialize Blob Storage
+	blobStore, err := s3.NewBlobStore(ctx, s3.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
+	if err != nil {
+		log.Error("Failed to initialize blob store", "error", err)
+		return
+	}
+
 	// 3. Wiring (Identical to Ingest, but we use different handlers)
 	repo := postgres.NewPassportRepository(dbPool)
-	svc, err := service.NewPassportService(repo, redisStore, log)
+	svc, err := service.NewPassportService(repo, redisStore, blobStore, log)
 	if err != nil {
 		log.Error("Failed to initialize service", "error", err)
 		return

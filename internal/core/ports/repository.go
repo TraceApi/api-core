@@ -11,6 +11,9 @@ type PassportRepository interface {
 	// Save creates or updates a passport
 	Save(ctx context.Context, passport *domain.Passport) error
 
+	// Update updates an existing passport (status, hash, published_at, storage_location)
+	Update(ctx context.Context, passport *domain.Passport) error
+
 	// GetByID retrieves a single passport
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
 
