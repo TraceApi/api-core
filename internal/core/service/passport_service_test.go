@@ -209,6 +209,7 @@ func TestPublishPassport_Success(t *testing.T) {
 	mockRepo.On("Update", ctx, mock.MatchedBy(func(p *domain.Passport) bool {
 		return p.Status == domain.StatusPublished && p.StorageLocation == "s3://bucket/key" && p.ImmutabilityHash != ""
 	})).Return(nil)
+	mockCache.On("Delete", mock.Anything, mock.Anything).Return(nil)
 
 	// Execute
 	published, err := svc.PublishPassport(ctx, id)
