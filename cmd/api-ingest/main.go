@@ -16,6 +16,7 @@ import (
 
 	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/service"
+	"github.com/TraceApi/api-core/internal/platform/bus"
 	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
@@ -56,12 +57,15 @@ func main() {
 		return
 	}
 
+	// 2c. Initialize Event Bus
+	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
+
 	// 3. Dependency Injection (Wiring)
 	// Repo -> Service -> Handler
 	passportRepo := postgres.NewPassportRepository(dbPool)
 
 	// Inject Cache into Service
-	passportSvc, err := service.NewPassportService(passportRepo, redisStore, blobStore, log)
+	passportSvc, err := service.NewPassportService(passportRepo, redisStore, blobStore, eventBus, log)
 	if err != nil {
 		log.Error("Failed to initialize service", "error", err)
 		return
@@ -83,7 +87,7 @@ func main() {
 
 	// Protected Routes
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.AuthMiddleware(cfg.JWTSecret, log))
+		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, redisStore, log))
 		passportHandler.RegisterRoutes(r)
 	})
 

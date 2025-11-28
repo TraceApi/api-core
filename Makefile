@@ -36,6 +36,12 @@ db-migrate-down: ## Rollback database migrations
 	@echo "Running migrations DOWN..."
 	migrate -path internal/platform/storage/postgres/migrations -database "postgres://trace_user:trace_password@localhost:5432/trace_core?sslmode=disable" down
 
+gen-jwt: ## Generate a test JWT token
+	go run cmd/gen-jwt-token/main.go
+
+gen-key: ## Generate a new API Key (usage: make gen-key tenant=my-tenant)
+	go run cmd/gen-api-key/main.go -tenant=$(or $(tenant),manufacturer-001)
+
 # The License Header Enforcer (Crucial for your BSL strategy)
 add-license:
 	@echo "Adding BSL License headers to new files..."

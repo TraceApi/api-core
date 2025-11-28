@@ -83,6 +83,15 @@ func (m *MockCacheRepository) Delete(ctx context.Context, key string) error {
 	return args.Error(0)
 }
 
+type MockEventBus struct {
+	mock.Mock
+}
+
+func (m *MockEventBus) Publish(ctx context.Context, channel string, event interface{}) error {
+	args := m.Called(ctx, channel, event)
+	return args.Error(0)
+}
+
 // --- Tests ---
 
 func TestCreatePassport_Success(t *testing.T) {
@@ -90,9 +99,10 @@ func TestCreatePassport_Success(t *testing.T) {
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
 	mockBlob := new(MockBlobStorage)
+	mockBus := new(MockEventBus)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, err := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
+	svc, err := service.NewPassportService(mockRepo, mockCache, mockBlob, mockBus, logger)
 	assert.NoError(t, err)
 
 	ctx := context.Background()
@@ -114,13 +124,14 @@ func TestCreatePassport_Success(t *testing.T) {
 
 	// Expectations
 	mockCache.On("GetIdempotency", ctx, mock.Anything).Return("", errors.New("cache miss"))
-	mockRepo.On("Save", ctx, mock.AnythingOfType("*domain.Passport")).Return(nil)
-	mockCache.On("SetIdempotency", ctx, mock.Anything, mock.Anything).Return(nil)
+	mockRepo.On("Save", mock.Anything, mock.AnythingOfType("*domain.Passport")).Return(nil)
+	mockCache.On("SetIdempotency", mock.Anything, mock.Anything, mock.Anything).Return(nil)
+	mockBus.On("Publish", mock.Anything, "events:passport_created", mock.Anything).Return(nil)
 
 	// Execute
 	passport, err := svc.CreatePassport(ctx, manufacturerID, category, payloadBytes)
 
-	// Assertions
+	// Assert
 	assert.NoError(t, err)
 	assert.NotNil(t, passport)
 	assert.Equal(t, manufacturerID, passport.ManufacturerID)
@@ -128,6 +139,8 @@ func TestCreatePassport_Success(t *testing.T) {
 
 	mockRepo.AssertExpectations(t)
 	mockCache.AssertExpectations(t)
+	mockBlob.AssertExpectations(t)
+	mockBus.AssertExpectations(t)
 }
 
 func TestCreatePassport_InvalidSchema(t *testing.T) {
@@ -135,9 +148,10 @@ func TestCreatePassport_InvalidSchema(t *testing.T) {
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
 	mockBlob := new(MockBlobStorage)
+	mockBus := new(MockEventBus)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, mockBus, logger)
 	ctx := context.Background()
 
 	// Invalid Payload (Missing required fields)
@@ -163,9 +177,10 @@ func TestCreatePassport_IdempotencyHit(t *testing.T) {
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
 	mockBlob := new(MockBlobStorage)
+	mockBus := new(MockEventBus)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, mockBus, logger)
 	ctx := context.Background()
 
 	existingID := uuid.New()
@@ -191,9 +206,10 @@ func TestPublishPassport_Success(t *testing.T) {
 	mockRepo := new(MockPassportRepository)
 	mockCache := new(MockCacheRepository)
 	mockBlob := new(MockBlobStorage)
+	mockBus := new(MockEventBus)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 
-	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, logger)
+	svc, _ := service.NewPassportService(mockRepo, mockCache, mockBlob, mockBus, logger)
 	ctx := context.Background()
 
 	id := uuid.New()

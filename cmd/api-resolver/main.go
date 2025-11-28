@@ -16,6 +16,7 @@ import (
 
 	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/service"
+	"github.com/TraceApi/api-core/internal/platform/bus"
 	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
@@ -55,9 +56,12 @@ func main() {
 		return
 	}
 
+	// Initialize Event Bus (Resolver doesn't publish, but service requires it)
+	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
+
 	// 3. Wiring (Identical to Ingest, but we use different handlers)
 	repo := postgres.NewPassportRepository(dbPool)
-	svc, err := service.NewPassportService(repo, redisStore, blobStore, log)
+	svc, err := service.NewPassportService(repo, redisStore, blobStore, eventBus, log)
 	if err != nil {
 		log.Error("Failed to initialize service", "error", err)
 		return

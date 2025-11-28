@@ -133,7 +133,10 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      bearerFormat: JWT
+      description: |
+        Authentication using either a JWT (OIDC) or an opaque API Key.
+        Both should be passed in the Authorization header: `Authorization: Bearer <token_or_key>`
+      bearerFormat: JWT or Opaque Key
   schemas:
     Passport:
       type: object

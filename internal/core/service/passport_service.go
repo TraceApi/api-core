@@ -39,6 +39,7 @@ type passportService struct {
 	repo      ports.PassportRepository
 	cache     ports.CacheRepository
 	blobStore ports.BlobStorage
+	eventBus  ports.EventBus
 	compiler  *jsonschema.Compiler
 	schemas   map[domain.ProductCategory]*jsonschema.Schema
 	log       *slog.Logger
@@ -47,7 +48,7 @@ type passportService struct {
 // Ensure interface implementation
 var _ ports.PassportService = (*passportService)(nil)
 
-func NewPassportService(repo ports.PassportRepository, cache ports.CacheRepository, blobStore ports.BlobStorage, log *slog.Logger) (ports.PassportService, error) {
+func NewPassportService(repo ports.PassportRepository, cache ports.CacheRepository, blobStore ports.BlobStorage, eventBus ports.EventBus, log *slog.Logger) (ports.PassportService, error) {
 	compiler := jsonschema.NewCompiler()
 	compiler.Draft = jsonschema.Draft2020
 
@@ -73,6 +74,7 @@ func NewPassportService(repo ports.PassportRepository, cache ports.CacheReposito
 		repo:      repo,
 		cache:     cache,
 		blobStore: blobStore,
+		eventBus:  eventBus,
 		compiler:  compiler,
 		schemas: map[domain.ProductCategory]*jsonschema.Schema{
 			domain.CategoryBattery: batterySchema,
@@ -147,6 +149,21 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 	// We do this LAST. If it fails, we log it but don't fail the request.
 	if err := s.cache.SetIdempotency(ctx, payloadHash, passport.ID.String()); err != nil {
 		s.log.Warn("failed to set idempotency key", "error", err)
+	}
+
+	// 6. Publish Event
+	event := struct {
+		TenantID   string    `json:"tenant_id"`
+		PassportID string    `json:"passport_id"`
+		Timestamp  time.Time `json:"timestamp"`
+	}{
+		TenantID:   manufacturerID,
+		PassportID: passport.ID.String(),
+		Timestamp:  time.Now().UTC(),
+	}
+
+	if err := s.eventBus.Publish(ctx, "events:passport_created", event); err != nil {
+		s.log.Error("failed to publish passport_created event", "error", err)
 	}
 
 	return passport, nil

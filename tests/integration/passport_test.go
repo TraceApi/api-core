@@ -16,6 +16,7 @@ import (
 	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/domain"
 	"github.com/TraceApi/api-core/internal/core/service"
+	"github.com/TraceApi/api-core/internal/platform/bus"
 	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
@@ -44,6 +45,9 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	// 2. Cache
 	redisStore := cache.NewRedisStore(cfg.RedisAddr)
 
+	// 2b. Event Bus
+	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
+
 	// 3. Blob Storage
 	blobStore, err := s3.NewBlobStore(ctx, s3.Config{
 		Endpoint:  cfg.S3Endpoint,
@@ -55,7 +59,7 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 
 	// 4. Wiring
 	passportRepo := postgres.NewPassportRepository(dbPool)
-	passportSvc, err := service.NewPassportService(passportRepo, redisStore, blobStore, log)
+	passportSvc, err := service.NewPassportService(passportRepo, redisStore, blobStore, eventBus, log)
 	require.NoError(t, err, "Failed to initialize service")
 
 	passportHandler := rest.NewPassportHandler(passportSvc, log)
@@ -70,7 +74,7 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.AuthMiddleware(cfg.JWTSecret, log))
+		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, redisStore, log))
 		passportHandler.RegisterRoutes(r)
 	})
 
