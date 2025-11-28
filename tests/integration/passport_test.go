@@ -19,6 +19,7 @@ import (
 	"github.com/TraceApi/api-core/internal/platform/cache"
 	"github.com/TraceApi/api-core/internal/platform/logger"
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
+	"github.com/TraceApi/api-core/internal/platform/storage/s3"
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	authMiddleware "github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
@@ -43,14 +44,23 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	// 2. Cache
 	redisStore := cache.NewRedisStore(cfg.RedisAddr)
 
-	// 3. Wiring
+	// 3. Blob Storage
+	blobStore, err := s3.NewBlobStore(ctx, s3.Config{
+		Endpoint:  cfg.S3Endpoint,
+		Region:    cfg.S3Region,
+		AccessKey: cfg.S3AccessKey,
+		SecretKey: cfg.S3SecretKey,
+	})
+	require.NoError(t, err, "Failed to initialize blob store")
+
+	// 4. Wiring
 	passportRepo := postgres.NewPassportRepository(dbPool)
-	passportSvc, err := service.NewPassportService(passportRepo, redisStore, log)
+	passportSvc, err := service.NewPassportService(passportRepo, redisStore, blobStore, log)
 	require.NoError(t, err, "Failed to initialize service")
 
 	passportHandler := rest.NewPassportHandler(passportSvc, log)
 
-	// 4. Router
+	// 5. Router
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
