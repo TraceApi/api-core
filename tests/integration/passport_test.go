@@ -1,6 +1,3 @@
-//go:build integration
-// +build integration
-
 /*
  * Copyright (c) 2025 Alessandro Faranda Gancio (dba TraceApi)
  *
