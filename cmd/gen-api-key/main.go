@@ -28,7 +28,8 @@ func main() {
 		fmt.Println("Error generating random bytes:", err)
 		os.Exit(1)
 	}
-	apiKey := hex.EncodeToString(bytes)
+	// Prepend the prefix "traceapi_"
+	apiKey := "traceapi_" + hex.EncodeToString(bytes)
 
 	// 2. Calculate SHA-256 Hash
 	hash := sha256.Sum256([]byte(apiKey))

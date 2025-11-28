@@ -135,6 +135,7 @@ components:
       scheme: bearer
       description: |
         Authentication using either a JWT (OIDC) or an opaque API Key.
+        API Keys must start with the prefix `traceapi_`.
         Both should be passed in the Authorization header: `Authorization: Bearer <token_or_key>`
       bearerFormat: JWT or Opaque Key
   schemas:

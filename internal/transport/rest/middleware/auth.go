@@ -28,8 +28,8 @@ const (
 	ManufacturerIDKey contextKey = "manufacturer_id"
 )
 
-// AuthMiddleware handles JWT validation
-func AuthMiddleware(secret string, log *slog.Logger) func(http.Handler) http.Handler {
+// JWTAuthMiddleware handles JWT validation
+func JWTAuthMiddleware(secret string, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
@@ -109,6 +109,12 @@ func APIKeyAuthMiddleware(authRepo ports.AuthRepository, log *slog.Logger) func(
 
 			tokenString := parts[1]
 
+			// Enforce API Key Prefix
+			if !strings.HasPrefix(tokenString, "traceapi_") {
+				http.Error(w, "invalid api key format", http.StatusUnauthorized)
+				return
+			}
+
 			// Hash the token (SHA-256)
 			hash := sha256.Sum256([]byte(tokenString))
 			apiKeyHash := hex.EncodeToString(hash[:])
@@ -150,7 +156,27 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 			}
 			tokenString := parts[1]
 
-			// 1. Try JWT
+			// 1. Check for API Key Prefix
+			if strings.HasPrefix(tokenString, "traceapi_") {
+				hash := sha256.Sum256([]byte(tokenString))
+				apiKeyHash := hex.EncodeToString(hash[:])
+				tenantID, valid, err := authRepo.ValidateKey(r.Context(), apiKeyHash)
+				if err != nil {
+					log.Error("auth validation error", "error", err)
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+					return
+				}
+
+				if valid {
+					ctx := context.WithValue(r.Context(), ManufacturerIDKey, tenantID)
+					next.ServeHTTP(w, r.WithContext(ctx))
+					return
+				}
+				http.Error(w, "invalid api key", http.StatusUnauthorized)
+				return
+			}
+
+			// 2. Try JWT
 			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -182,23 +208,7 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 				return
 			}
 
-			// 2. Try API Key
-			hash := sha256.Sum256([]byte(tokenString))
-			apiKeyHash := hex.EncodeToString(hash[:])
-			tenantID, valid, err := authRepo.ValidateKey(r.Context(), apiKeyHash)
-			if err != nil {
-				log.Error("auth validation error", "error", err)
-				http.Error(w, "internal server error", http.StatusInternalServerError)
-				return
-			}
-
-			if valid {
-				ctx := context.WithValue(r.Context(), ManufacturerIDKey, tenantID)
-				next.ServeHTTP(w, r.WithContext(ctx))
-				return
-			}
-
-			// Both failed
+			// Both failed (or JWT failed)
 			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
 		})
 	}

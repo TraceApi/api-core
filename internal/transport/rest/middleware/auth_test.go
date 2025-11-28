@@ -89,9 +89,9 @@ func TestHybridAuthMiddleware(t *testing.T) {
 		},
 		{
 			name:       "Valid API Key",
-			authHeader: "Bearer my-api-key",
+			authHeader: "Bearer traceapi_my-api-key",
 			setupMock: func() {
-				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("my-api-key")).Return("mfg-api", true, nil)
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_my-api-key")).Return("mfg-api", true, nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkContext:   true,
@@ -99,19 +99,25 @@ func TestHybridAuthMiddleware(t *testing.T) {
 		},
 		{
 			name:       "Invalid API Key",
-			authHeader: "Bearer wrong-key",
+			authHeader: "Bearer traceapi_wrong-key",
 			setupMock: func() {
-				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("wrong-key")).Return("", false, nil)
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_wrong-key")).Return("", false, nil)
 			},
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
 			name:       "Redis Error",
-			authHeader: "Bearer error-key",
+			authHeader: "Bearer traceapi_error-key",
 			setupMock: func() {
-				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("error-key")).Return("", false, errors.New("redis down"))
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_error-key")).Return("", false, errors.New("redis down"))
 			},
 			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "API Key without prefix (treated as JWT and fails)",
+			authHeader:     "Bearer no-prefix-key",
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnauthorized,
 		},
 	}
 
@@ -142,6 +148,151 @@ func TestHybridAuthMiddleware(t *testing.T) {
 
 			assert.Equal(t, tt.expectedStatus, rec.Code)
 			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestAPIKeyAuthMiddleware(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	mockRepo := new(MockAuthRepository)
+	middleware := APIKeyAuthMiddleware(mockRepo, logger)
+
+	// Helper to create API Key Hash
+	createKeyHash := func(key string) string {
+		hash := sha256.Sum256([]byte(key))
+		return hex.EncodeToString(hash[:])
+	}
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		setupMock      func()
+		expectedStatus int
+		checkContext   bool
+		expectedID     string
+	}{
+		{
+			name:       "Valid API Key",
+			authHeader: "Bearer traceapi_valid-key",
+			setupMock: func() {
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_valid-key")).Return("mfg-api", true, nil)
+			},
+			expectedStatus: http.StatusOK,
+			checkContext:   true,
+			expectedID:     "mfg-api",
+		},
+		{
+			name:           "Invalid API Key Format (No Prefix)",
+			authHeader:     "Bearer invalid-format-key",
+			setupMock:      func() {},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "Invalid API Key (Valid Format, Invalid Key)",
+			authHeader: "Bearer traceapi_wrong-key",
+			setupMock: func() {
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_wrong-key")).Return("", false, nil)
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockRepo.ExpectedCalls = nil
+			mockRepo.Calls = nil
+			tt.setupMock()
+
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.checkContext {
+					id, ok := r.Context().Value(ManufacturerIDKey).(string)
+					assert.True(t, ok)
+					assert.Equal(t, tt.expectedID, id)
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest("GET", "/", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			rec := httptest.NewRecorder()
+
+			middleware(nextHandler).ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
+			mockRepo.AssertExpectations(t)
+		})
+	}
+}
+
+func TestJWTAuthMiddleware(t *testing.T) {
+	secret := "test-secret"
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	middleware := JWTAuthMiddleware(secret, logger)
+
+	// Helper to create a token
+	createToken := func(secret string, sub string, exp time.Duration) string {
+		claims := jwt.MapClaims{
+			"sub": sub,
+			"exp": time.Now().Add(exp).Unix(),
+		}
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		tokenString, _ := token.SignedString([]byte(secret))
+		return tokenString
+	}
+
+	tests := []struct {
+		name           string
+		authHeader     string
+		expectedStatus int
+		checkContext   bool
+		expectedID     string
+	}{
+		{
+			name:           "Valid JWT",
+			authHeader:     "Bearer " + createToken(secret, "mfg-jwt", time.Hour),
+			expectedStatus: http.StatusOK,
+			checkContext:   true,
+			expectedID:     "mfg-jwt",
+		},
+		{
+			name:           "Invalid JWT (Wrong Secret)",
+			authHeader:     "Bearer " + createToken("wrong-secret", "mfg-jwt", time.Hour),
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "Expired JWT",
+			authHeader:     "Bearer " + createToken(secret, "mfg-jwt", -time.Hour),
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "API Key (Should Fail)",
+			authHeader:     "Bearer traceapi_some-key",
+			expectedStatus: http.StatusUnauthorized, // JWT middleware doesn't know about API keys
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if tt.checkContext {
+					id, ok := r.Context().Value(ManufacturerIDKey).(string)
+					assert.True(t, ok)
+					assert.Equal(t, tt.expectedID, id)
+				}
+				w.WriteHeader(http.StatusOK)
+			})
+
+			req := httptest.NewRequest("GET", "/", nil)
+			if tt.authHeader != "" {
+				req.Header.Set("Authorization", tt.authHeader)
+			}
+			rec := httptest.NewRecorder()
+
+			middleware(nextHandler).ServeHTTP(rec, req)
+
+			assert.Equal(t, tt.expectedStatus, rec.Code)
 		})
 	}
 }
