@@ -42,6 +42,14 @@ func (m *MockPassportService) GetPassport(ctx context.Context, id uuid.UUID) (*d
 	return args.Get(0).(*domain.Passport), args.Error(1)
 }
 
+func (m *MockPassportService) PublishPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Passport), args.Error(1)
+}
+
 // --- Tests ---
 
 func TestCreatePassport_Handler_Success(t *testing.T) {
@@ -145,4 +153,55 @@ func TestCreatePassport_Handler_InternalError(t *testing.T) {
 	r.ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestPublishPassport_Handler_Success(t *testing.T) {
+	mockSvc := new(MockPassportService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	handler := rest.NewPassportHandler(mockSvc, logger)
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	id := uuid.New()
+	passport := &domain.Passport{ID: id, Status: domain.StatusPublished}
+
+	req, _ := http.NewRequest("POST", "/passports/"+id.String()+"/publish", nil)
+
+	// Inject Auth Context
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
+
+	mockSvc.On("PublishPassport", mock.Anything, id).Return(passport, nil)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusOK, rr.Code)
+	var resp domain.Passport
+	json.Unmarshal(rr.Body.Bytes(), &resp)
+	assert.Equal(t, id, resp.ID)
+}
+
+func TestPublishPassport_Handler_Conflict(t *testing.T) {
+	mockSvc := new(MockPassportService)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	handler := rest.NewPassportHandler(mockSvc, logger)
+	r := chi.NewRouter()
+	handler.RegisterRoutes(r)
+
+	id := uuid.New()
+
+	req, _ := http.NewRequest("POST", "/passports/"+id.String()+"/publish", nil)
+
+	// Inject Auth Context
+	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	req = req.WithContext(ctx)
+
+	mockSvc.On("PublishPassport", mock.Anything, id).Return(nil, domain.ErrPassportAlreadyPublished)
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, req)
+
+	assert.Equal(t, http.StatusConflict, rr.Code)
+	assert.Contains(t, rr.Body.String(), "passport already published")
 }
