@@ -226,5 +226,11 @@ func (s *passportService) PublishPassport(ctx context.Context, id uuid.UUID) (*d
 		return nil, fmt.Errorf("failed to save published passport: %w", err)
 	}
 
+	// 8. Invalidate Cache (Force next read to hit DB)
+	cacheKey := fmt.Sprintf("passport:%s", id.String())
+	go func() {
+		_ = s.cache.Delete(context.Background(), cacheKey)
+	}()
+
 	return passport, nil
 }

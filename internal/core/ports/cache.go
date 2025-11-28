@@ -10,4 +10,5 @@ type CacheRepository interface {
 	SetIdempotency(ctx context.Context, hash string, passportID string) error
 	Get(ctx context.Context, key string) (string, error)
 	Set(ctx context.Context, key string, value string, ttl time.Duration) error
+	Delete(ctx context.Context, key string) error
 }
