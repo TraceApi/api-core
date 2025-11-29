@@ -127,3 +127,9 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 		})
 	}
 }
+
+// GetManufacturerID retrieves the ID from context
+func GetManufacturerID(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(ManufacturerIDKey).(string)
+	return id, ok
+}
