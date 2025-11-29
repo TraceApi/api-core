@@ -13,19 +13,35 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/TraceApi/api-core/internal/core/ports"
 	"github.com/redis/go-redis/v9"
 )
 
-// ValidateKey checks if the API key hash exists in Redis and returns the associated tenantID.
-// Key format: auth:apikey:{hash} -> tenantID
-func (r *RedisStore) ValidateKey(ctx context.Context, apiKeyHash string) (string, bool, error) {
-	key := fmt.Sprintf("auth:apikey:%s", apiKeyHash)
-	tenantID, err := r.client.Get(ctx, key).Result()
+type RedisAuthRepository struct {
+	client *redis.Client
+}
+
+// Ensure interface compliance
+var _ ports.AuthRepository = (*RedisAuthRepository)(nil)
+
+func NewRedisAuthRepository(client *redis.Client) *RedisAuthRepository {
+	return &RedisAuthRepository{client: client}
+}
+
+func (r *RedisAuthRepository) ValidateKey(ctx context.Context, apiKeyHash string) (string, bool, error) {
+	// Key format: "auth:apikey:{hash}" -> value: "{tenant_id}"
+	redisKey := fmt.Sprintf("auth:apikey:%s", apiKeyHash)
+
+	val, err := r.client.Get(ctx, redisKey).Result()
 	if err == redis.Nil {
+		// Key does not exist = Invalid
 		return "", false, nil
 	}
 	if err != nil {
+		// System error (Redis down)
 		return "", false, err
 	}
-	return tenantID, true, nil
+
+	// Key exists, return the TenantID (which is stored as the value)
+	return val, true, nil
 }

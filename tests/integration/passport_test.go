@@ -49,7 +49,9 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	require.NoError(t, err, "Failed to connect to database")
 
 	// 2. Cache
-	redisStore := cache.NewRedisStore(cfg.RedisAddr)
+	redisClient := cache.NewRedisClient(cfg.RedisAddr)
+	redisStore := cache.NewRedisStore(redisClient)
+	authRepo := cache.NewRedisAuthRepository(redisClient)
 
 	// 2b. Event Bus
 	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
@@ -80,7 +82,7 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, redisStore, log))
+		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, authRepo, log))
 		passportHandler.RegisterRoutes(r)
 	})
 

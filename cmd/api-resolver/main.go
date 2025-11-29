@@ -42,7 +42,8 @@ func main() {
 	}
 	defer dbPool.Close()
 
-	redisStore := cache.NewRedisStore(cfg.RedisAddr)
+	redisClient := cache.NewRedisClient(cfg.RedisAddr)
+	redisStore := cache.NewRedisStore(redisClient)
 
 	// Initialize Blob Storage
 	blobStore, err := s3.NewBlobStore(ctx, s3.Config{

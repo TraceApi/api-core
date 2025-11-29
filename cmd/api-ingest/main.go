@@ -43,7 +43,9 @@ func main() {
 	defer dbPool.Close()
 
 	// 2a. Initialize Cache
-	redisStore := cache.NewRedisStore(cfg.RedisAddr)
+	redisClient := cache.NewRedisClient(cfg.RedisAddr)
+	redisStore := cache.NewRedisStore(redisClient)
+	authRepo := cache.NewRedisAuthRepository(redisClient)
 
 	// 2b. Initialize Blob Storage
 	blobStore, err := s3.NewBlobStore(ctx, s3.Config{
@@ -87,7 +89,7 @@ func main() {
 
 	// Protected Routes
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, redisStore, log))
+		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, authRepo, log))
 		passportHandler.RegisterRoutes(r)
 	})
 

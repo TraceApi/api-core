@@ -23,14 +23,17 @@ type RedisStore struct {
 	client *redis.Client
 }
 
-func NewRedisStore(addr string) *RedisStore {
+func NewRedisClient(addr string) *redis.Client {
 	// In a real app, we'd handle passwords via options
-	rdb := redis.NewClient(&redis.Options{
+	return redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: "", // No password set in docker-compose
 		DB:       0,  // Use default DB
 	})
-	return &RedisStore{client: rdb}
+}
+
+func NewRedisStore(client *redis.Client) *RedisStore {
+	return &RedisStore{client: client}
 }
 
 // GetIdempotency checks if this operation hash exists.
