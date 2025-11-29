@@ -45,3 +45,14 @@ func (r *RedisAuthRepository) ValidateKey(ctx context.Context, apiKeyHash string
 	// Key exists, return the TenantID (which is stored as the value)
 	return val, true, nil
 }
+
+func (r *RedisAuthRepository) GetTenantState(ctx context.Context, tenantID string) (string, error) {
+	key := fmt.Sprintf("tenant:state:%s", tenantID)
+	val, err := r.client.Get(ctx, key).Result()
+
+	if err == redis.Nil {
+		// If no state key exists, assume ACTIVE
+		return "ACTIVE", nil
+	}
+	return val, err
+}

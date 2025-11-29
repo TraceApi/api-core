@@ -36,6 +36,11 @@ func (m *MockAuthRepository) ValidateKey(ctx context.Context, apiKeyHash string)
 	return args.String(0), args.Bool(1), args.Error(2)
 }
 
+func (m *MockAuthRepository) GetTenantState(ctx context.Context, tenantID string) (string, error) {
+	args := m.Called(ctx, tenantID)
+	return args.String(0), args.Error(1)
+}
+
 func TestHybridAuthMiddleware(t *testing.T) {
 	secret := "test-secret"
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -80,9 +85,11 @@ func TestHybridAuthMiddleware(t *testing.T) {
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "Valid JWT",
-			authHeader:     "Bearer " + createToken(secret, "mfg-jwt", time.Hour),
-			setupMock:      func() {},
+			name:       "Valid JWT",
+			authHeader: "Bearer " + createToken(secret, "mfg-jwt", time.Hour),
+			setupMock: func() {
+				mockRepo.On("GetTenantState", mock.Anything, "mfg-jwt").Return("ACTIVE", nil)
+			},
 			expectedStatus: http.StatusOK,
 			checkContext:   true,
 			expectedID:     "mfg-jwt",
@@ -92,10 +99,36 @@ func TestHybridAuthMiddleware(t *testing.T) {
 			authHeader: "Bearer traceapi_my-api-key",
 			setupMock: func() {
 				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_my-api-key")).Return("mfg-api", true, nil)
+				mockRepo.On("GetTenantState", mock.Anything, "mfg-api").Return("ACTIVE", nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkContext:   true,
 			expectedID:     "mfg-api",
+		},
+		{
+			name:       "Blocked Tenant (JWT)",
+			authHeader: "Bearer " + createToken(secret, "mfg-blocked", time.Hour),
+			setupMock: func() {
+				mockRepo.On("GetTenantState", mock.Anything, "mfg-blocked").Return("BLOCKED", nil)
+			},
+			expectedStatus: 402, // Payment Required
+		},
+		{
+			name:       "Blocked Tenant (API Key)",
+			authHeader: "Bearer traceapi_blocked-key",
+			setupMock: func() {
+				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_blocked-key")).Return("mfg-blocked-api", true, nil)
+				mockRepo.On("GetTenantState", mock.Anything, "mfg-blocked-api").Return("BLOCKED", nil)
+			},
+			expectedStatus: 402, // Payment Required
+		},
+		{
+			name:       "Redis Error on State Check",
+			authHeader: "Bearer " + createToken(secret, "mfg-error", time.Hour),
+			setupMock: func() {
+				mockRepo.On("GetTenantState", mock.Anything, "mfg-error").Return("", errors.New("redis down"))
+			},
+			expectedStatus: http.StatusInternalServerError,
 		},
 		{
 			name:       "Invalid API Key",

@@ -28,7 +28,6 @@ const (
 	ManufacturerIDKey contextKey = "manufacturer_id"
 )
 
-// HybridAuthMiddleware handles both JWT and API Key validation
 func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -45,36 +44,43 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 			}
 			tokenString := parts[1]
 
-			// 1. Check for API Key Prefix
+			var tenantID string
+
+			// ---------------------------------------------------------
+			// PHASE 1: IDENTIFICATION
+			// ---------------------------------------------------------
+
 			if strings.HasPrefix(tokenString, "traceapi_") {
+				// --- STRATEGY A: API KEY ---
 				hash := sha256.Sum256([]byte(tokenString))
 				apiKeyHash := hex.EncodeToString(hash[:])
-				tenantID, valid, err := authRepo.ValidateKey(r.Context(), apiKeyHash)
+
+				id, valid, err := authRepo.ValidateKey(r.Context(), apiKeyHash)
 				if err != nil {
 					log.Error("auth validation error", "error", err)
 					http.Error(w, "internal server error", http.StatusInternalServerError)
 					return
 				}
-
-				if valid {
-					ctx := context.WithValue(r.Context(), ManufacturerIDKey, tenantID)
-					next.ServeHTTP(w, r.WithContext(ctx))
+				if !valid {
+					http.Error(w, "invalid api key", http.StatusUnauthorized)
 					return
 				}
-				http.Error(w, "invalid api key", http.StatusUnauthorized)
-				return
-			}
+				tenantID = id
 
-			// 2. Try JWT
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			} else {
+				// --- STRATEGY B: JWT ---
+				token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+					if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+						return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+					}
+					return []byte(jwtSecret), nil
+				})
+
+				if err != nil || !token.Valid {
+					http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+					return
 				}
-				return []byte(jwtSecret), nil
-			})
 
-			if err == nil && token.Valid {
-				// Valid JWT
 				claims, ok := token.Claims.(jwt.MapClaims)
 				if !ok {
 					http.Error(w, "invalid token claims", http.StatusUnauthorized)
@@ -91,20 +97,33 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 						return
 					}
 				}
+				tenantID = sub
+			}
 
-				ctx := context.WithValue(r.Context(), ManufacturerIDKey, sub)
-				next.ServeHTTP(w, r.WithContext(ctx))
+			// ---------------------------------------------------------
+			// PHASE 2: AUTHORIZATION
+			// ---------------------------------------------------------
+			// This is the "Circuit Breaker". It applies to BOTH API Keys and JWTs.
+
+			state, err := authRepo.GetTenantState(r.Context(), tenantID)
+			if err != nil {
+				// Fail CLOSED. If Redis is down, we can't verify quota.
+				log.Error("failed to check tenant state", "error", err)
+				http.Error(w, "system error", http.StatusInternalServerError)
 				return
 			}
 
-			// Both failed (or JWT failed)
-			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			if state == "BLOCKED" {
+				// Quota exceeded or Bill unpaid
+				http.Error(w, "quota exceeded or payment required", 402)
+				return
+			}
+
+			// ---------------------------------------------------------
+			// PHASE 3: EXECUTION
+			// ---------------------------------------------------------
+			ctx := context.WithValue(r.Context(), ManufacturerIDKey, tenantID)
+			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
-}
-
-// GetManufacturerID retrieves the ID from context
-func GetManufacturerID(ctx context.Context) (string, bool) {
-	id, ok := ctx.Value(ManufacturerIDKey).(string)
-	return id, ok
 }
