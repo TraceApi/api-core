@@ -1,0 +1,41 @@
+services:
+  api-ingest:
+    build:
+      context: .
+      dockerfile: deploy/ingest.Dockerfile
+    container_name: trace_ingest
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://trace_user:trace_password@postgres:5432/trace_core
+      - REDIS_ADDR=redis:6379
+      - JWT_SECRET=super-secret-dev-key-do-not-use-in-prod
+      - S3_ENDPOINT=http://minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY=minio_admin
+      - S3_SECRET_KEY=minio_password
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trace_net
+
+  api-resolver:
+    build:
+      context: .
+      dockerfile: deploy/resolver.Dockerfile
+    container_name: trace_resolver
+    ports:
+      - "8081:8081"
+    environment:
+      - DATABASE_URL=postgres://trace_user:trace_password@postgres:5432/trace_core
+      - REDIS_ADDR=redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_REGION=us-east-1
+      - S3_ACCESS_KEY=minio_admin
+      - S3_SECRET_KEY=minio_password
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - trace_net
