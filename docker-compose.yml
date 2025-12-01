@@ -64,3 +64,4 @@ volumes:
 
 networks:
   trace_net:
+    name: trace_net
