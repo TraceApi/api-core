@@ -49,6 +49,11 @@ func (m *MockPassportRepository) FindByCategory(ctx context.Context, category do
 	return args.Get(0).([]*domain.Passport), args.Error(1)
 }
 
+func (m *MockPassportRepository) FindByManufacturer(ctx context.Context, manufacturerID string) ([]*domain.Passport, error) {
+	args := m.Called(ctx, manufacturerID)
+	return args.Get(0).([]*domain.Passport), args.Error(1)
+}
+
 func (m *MockPassportRepository) Update(ctx context.Context, passport *domain.Passport) error {
 	args := m.Called(ctx, passport)
 	return args.Error(0)

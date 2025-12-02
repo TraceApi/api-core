@@ -28,4 +28,7 @@ type PassportRepository interface {
 
 	// FindByCategory retrieves a page of passports (Basic pagination)
 	FindByCategory(ctx context.Context, category domain.ProductCategory, limit, offset int) ([]*domain.Passport, error)
+
+	// FindByManufacturer retrieves all passports for a specific manufacturer
+	FindByManufacturer(ctx context.Context, manufacturerID string) ([]*domain.Passport, error)
 }

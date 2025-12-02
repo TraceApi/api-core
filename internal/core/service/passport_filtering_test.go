@@ -37,6 +37,11 @@ func (m *MockRepo) FindByCategory(ctx context.Context, category domain.ProductCa
 	return args.Get(0).([]*domain.Passport), args.Error(1)
 }
 
+func (m *MockRepo) FindByManufacturer(ctx context.Context, manufacturerID string) ([]*domain.Passport, error) {
+	args := m.Called(ctx, manufacturerID)
+	return args.Get(0).([]*domain.Passport), args.Error(1)
+}
+
 type MockCache struct{ mock.Mock }
 
 func (m *MockCache) Get(ctx context.Context, key string) (string, error) {

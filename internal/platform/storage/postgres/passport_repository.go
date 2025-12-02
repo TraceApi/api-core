@@ -79,7 +79,8 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Passport) err
 			immutability_hash = $3,
 			published_at = $4,
 			storage_location = $5,
-			updated_at = $6
+			updated_at = $6,
+			attributes = $7
 		WHERE id = $1
 	`
 
@@ -90,6 +91,7 @@ func (r *PostgresRepository) Update(ctx context.Context, p *domain.Passport) err
 		p.PublishedAt,
 		p.StorageLocation,
 		time.Now(),
+		p.Attributes,
 	)
 	return err
 }
@@ -150,6 +152,34 @@ func (r *PostgresRepository) FindByCategory(ctx context.Context, category domain
 		if err := rows.Scan(&p.ID, &p.ProductCategory, &p.Status, &p.ManufacturerID, &p.ManufacturerName, &p.Attributes); err != nil {
 			return nil, err
 		}
+		passports = append(passports, &p)
+	}
+
+	return passports, nil
+}
+
+func (r *PostgresRepository) FindByManufacturer(ctx context.Context, manufacturerID string) ([]*domain.Passport, error) {
+	query := `
+		SELECT id, product_category, status, manufacturer_id, manufacturer_name, attributes, created_at, updated_at, published_at
+		FROM passports
+		WHERE manufacturer_id = $1
+		ORDER BY created_at DESC
+	`
+
+	rows, err := r.db.Query(ctx, query, manufacturerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var passports []*domain.Passport
+	for rows.Next() {
+		var p domain.Passport
+		var publishedAt *time.Time
+		if err := rows.Scan(&p.ID, &p.ProductCategory, &p.Status, &p.ManufacturerID, &p.ManufacturerName, &p.Attributes, &p.CreatedAt, &p.UpdatedAt, &publishedAt); err != nil {
+			return nil, err
+		}
+		p.PublishedAt = publishedAt
 		passports = append(passports, &p)
 	}
 

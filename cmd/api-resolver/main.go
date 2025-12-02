@@ -22,6 +22,7 @@ import (
 	"github.com/TraceApi/api-core/internal/platform/storage/postgres"
 	"github.com/TraceApi/api-core/internal/platform/storage/s3"
 	"github.com/TraceApi/api-core/internal/transport/rest"
+	authMiddleware "github.com/TraceApi/api-core/internal/transport/rest/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -80,6 +81,7 @@ func main() {
 	}
 
 	handler := rest.NewResolverHandler(svc, authRepo, log, cfg)
+	passportHandler := rest.NewPassportHandler(svc, log)
 
 	// 4. Router
 	r := chi.NewRouter()
@@ -96,7 +98,7 @@ func main() {
 	if !cfg.IsProduction() {
 		log.Info("Enabling CORS for Development")
 		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{"http://localhost:3000"},
+			AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
 			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 			ExposedHeaders:   []string{"Link"},
@@ -112,6 +114,12 @@ func main() {
 	})
 
 	handler.RegisterResolverRoutes(r)
+
+	// Protected Routes (Manufacturer Console)
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware.HybridAuthMiddleware(cfg.JWTSecret, authRepo, log))
+		passportHandler.RegisterRoutes(r)
+	})
 
 	// 5. Start
 	port := ":8081" // Note: Different port than Ingest (8080)

@@ -15,6 +15,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/TraceApi/api-core/internal/core/domain"
 	"github.com/TraceApi/api-core/internal/core/ports"
@@ -35,6 +36,8 @@ func NewPassportHandler(s ports.PassportService, log *slog.Logger) *PassportHand
 // RegisterRoutes wires up the endpoints to the router
 func (h *PassportHandler) RegisterRoutes(r chi.Router) {
 	r.Post("/passports", h.CreatePassport)
+	r.Get("/passports", h.ListPassports)
+	r.Put("/passports/{id}", h.UpdatePassport)
 	r.Post("/passports/{id}/publish", h.PublishPassport)
 }
 
@@ -104,16 +107,84 @@ func (h *PassportHandler) PublishPassport(w http.ResponseWriter, r *http.Request
 
 	passport, err := h.service.PublishPassport(r.Context(), id)
 	if err != nil {
+		h.log.Error("failed to publish passport", "error", err)
 		if errors.Is(err, domain.ErrPassportAlreadyPublished) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		h.log.Error("failed to publish passport", "error", err)
+		if errors.Is(err, domain.ErrInvalidInput) || strings.Contains(err.Error(), "validation failed") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(passport)
+}
+
+// ListPassports handles GET /passports
+func (h *PassportHandler) ListPassports(w http.ResponseWriter, r *http.Request) {
+	// 1. Get Manufacturer ID from Context
+	manufacturerID, ok := middleware.GetManufacturerID(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized: missing manufacturer identity", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Call Service
+	passports, err := h.service.ListPassports(r.Context(), manufacturerID)
+	if err != nil {
+		h.log.Error("failed to list passports", "error", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Respond
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(passports)
+}
+
+// UpdatePassport handles PUT /passports/{id}
+func (h *PassportHandler) UpdatePassport(w http.ResponseWriter, r *http.Request) {
+	// 1. Get Manufacturer ID
+	manufacturerID, ok := middleware.GetManufacturerID(r.Context())
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Parse ID
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "invalid passport id", http.StatusBadRequest)
+		return
+	}
+
+	// 3. Read Body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "failed to read body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// 4. Call Service
+	passport, err := h.service.UpdatePassport(r.Context(), id, manufacturerID, body)
+	if err != nil {
+		h.log.Error("failed to update passport", "error", err)
+		if errors.Is(err, domain.ErrInvalidInput) || strings.Contains(err.Error(), "validation failed") {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 5. Respond
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(passport)
 }

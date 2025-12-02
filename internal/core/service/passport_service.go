@@ -324,3 +324,59 @@ func (s *passportService) PublishPassport(ctx context.Context, id uuid.UUID) (*d
 
 	return passport, nil
 }
+
+func (s *passportService) ListPassports(ctx context.Context, manufacturerID string) ([]*domain.Passport, error) {
+	return s.repo.FindByManufacturer(ctx, manufacturerID)
+}
+
+func (s *passportService) UpdatePassport(ctx context.Context, id uuid.UUID, manufacturerID string, payload []byte) (*domain.Passport, error) {
+	// 1. Fetch Passport
+	passport, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch passport: %w", err)
+	}
+
+	// 2. Check Ownership
+	if passport.ManufacturerID != manufacturerID {
+		return nil, fmt.Errorf("unauthorized")
+	}
+
+	// 3. Check Status (Must be DRAFT)
+	if passport.Status != domain.StatusDraft {
+		return nil, fmt.Errorf("cannot update published passport")
+	}
+
+	// 4. Schema Validation
+	schema, exists := s.schemas[passport.ProductCategory]
+	if !exists {
+		return nil, fmt.Errorf("unsupported category")
+	}
+
+	var jsonInterface interface{}
+	if err := json.Unmarshal(payload, &jsonInterface); err != nil {
+		return nil, fmt.Errorf("%w: invalid JSON", domain.ErrInvalidInput)
+	}
+
+	if err := schema.Validate(jsonInterface); err != nil {
+		s.log.Warn("schema validation failed", "error", err)
+		return nil, fmt.Errorf("%w: schema validation failed: %v", domain.ErrInvalidInput, err)
+	}
+
+	// 5. Update Fields
+	passport.Attributes = json.RawMessage(payload)
+	now := time.Now().UTC()
+	passport.UpdatedAt = now
+
+	// 6. Save to Repo (Update)
+	if err := s.repo.Update(ctx, passport); err != nil {
+		return nil, fmt.Errorf("failed to update passport: %w", err)
+	}
+
+	// 7. Invalidate Cache
+	cacheKey := fmt.Sprintf("passport:%s", id.String())
+	go func() {
+		_ = s.cache.Delete(context.Background(), cacheKey)
+	}()
+
+	return passport, nil
+}

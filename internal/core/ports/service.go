@@ -24,4 +24,8 @@ type PassportService interface {
 	GetPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
 
 	PublishPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
+
+	ListPassports(ctx context.Context, manufacturerID string) ([]*domain.Passport, error)
+
+	UpdatePassport(ctx context.Context, id uuid.UUID, manufacturerID string, payload []byte) (*domain.Passport, error)
 }
