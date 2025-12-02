@@ -119,3 +119,39 @@ func TestGetPassport_Filtering(t *testing.T) {
 	assert.Equal(t, "Test", attrsRestricted["batteryModel"])
 	assert.NotNil(t, attrsRestricted["disassemblyInstructions"], "Restricted field should be present")
 }
+
+func TestGetPassport_Filtering_Textile(t *testing.T) {
+	// Setup Service
+	repo := new(MockRepo)
+	cache := new(MockCache)
+	// We don't need real BlobStore or EventBus for this test
+	// NewPassportService will load the embedded textile.json which SHOULD have supplyChainDetails restricted
+	svc, err := NewPassportService(repo, cache, nil, nil, nil)
+	assert.NoError(t, err)
+
+	// Create a passport with restricted data
+	fullAttributes := `{"garmentType": "T-Shirt", "supplyChainDetails": {"spinningFactory": "Secret Factory"}}`
+	id := uuid.New()
+	passport := &domain.Passport{
+		ID:              id,
+		ProductCategory: domain.CategoryTextile,
+		Attributes:      json.RawMessage(fullAttributes),
+	}
+
+	// Mock Repo to return the passport
+	repo.On("GetByID", mock.Anything, id).Return(passport, nil).Once()
+	// Mock Cache Miss (to force DB hit)
+	cache.On("Get", mock.Anything, mock.Anything).Return("", assert.AnError)
+	// Mock Cache Set (ignored)
+	cache.On("Set", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil)
+
+	// Test 1: Public Context (Should Filter)
+	ctxPublic := context.Background() // No context value = Public
+	pPublic, err := svc.GetPassport(ctxPublic, id)
+	assert.NoError(t, err)
+
+	var attrsPublic map[string]interface{}
+	json.Unmarshal(pPublic.Attributes, &attrsPublic)
+	assert.Equal(t, "T-Shirt", attrsPublic["garmentType"])
+	assert.Nil(t, attrsPublic["supplyChainDetails"], "Restricted field should be removed")
+}

@@ -3,44 +3,128 @@
   "$id": "https://api.trace-stack.io/schemas/payloads/textile.json",
   "title": "Textile & Apparel Payload",
   "type": "object",
-  "required": ["garmentType", "fiberComposition", "origin", "recyclability"],
+  "required": [
+    "garmentType",
+    "fiberComposition",
+    "origin",
+    "recyclability"
+  ],
   "properties": {
-    "garmentType": { "type": "string", "examples": ["T-Shirt", "Jeans", "Jacket"] },
-    "collectionYear": { "type": "string", "pattern": "^(20)\\d{2}$" },
+    "garmentType": {
+      "type": "string",
+      "examples": [
+        "T-Shirt",
+        "Jeans",
+        "Jacket"
+      ]
+    },
+    "collectionYear": {
+      "type": "string",
+      "pattern": "^(20)\\d{2}$"
+    },
     "fiberComposition": {
       "type": "array",
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["fiberName", "percentage"],
+        "required": [
+          "fiberName",
+          "percentage"
+        ],
         "properties": {
-          "fiberName": { "type": "string", "enum": ["COTTON", "POLYESTER", "WOOL", "ELASTANE", "LYOCELL"] },
-          "percentage": { "type": "number", "minimum": 0, "maximum": 100 },
-          "isRecycled": { "type": "boolean" }
+          "fiberName": {
+            "type": "string",
+            "enum": [
+              "COTTON",
+              "POLYESTER",
+              "WOOL",
+              "ELASTANE",
+              "LYOCELL"
+            ]
+          },
+          "percentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "isRecycled": {
+            "type": "boolean"
+          }
         }
       }
     },
     "origin": {
       "type": "object",
       "properties": {
-        "fiberProductionCountry": { "type": "string", "minLength": 2, "maxLength": 2 },
-        "weavingCountry": { "type": "string", "minLength": 2, "maxLength": 2 },
-        "confectionCountry": { "type": "string", "minLength": 2, "maxLength": 2 }
+        "fiberProductionCountry": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 2
+        },
+        "weavingCountry": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 2
+        },
+        "confectionCountry": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 2
+        }
       }
     },
     "careInstructions": {
       "type": "object",
       "properties": {
-        "washing": { "type": "string", "enum": ["HAND_WASH", "MACHINE_30", "MACHINE_40", "DRY_CLEAN"] },
-        "bleaching": { "type": "boolean" },
-        "drying": { "type": "string" }
+        "washing": {
+          "type": "string",
+          "enum": [
+            "HAND_WASH",
+            "MACHINE_30",
+            "MACHINE_40",
+            "DRY_CLEAN"
+          ]
+        },
+        "bleaching": {
+          "type": "boolean"
+        },
+        "drying": {
+          "type": "string"
+        }
       }
     },
     "circularity": {
       "type": "object",
       "properties": {
-        "microplasticRelease": { "type": "string", "description": "High/Medium/Low risk" },
-        "recyclabilityClass": { "type": "string", "enum": ["A", "B", "C", "D", "E"] }
+        "microplasticRelease": {
+          "type": "string",
+          "description": "High/Medium/Low risk"
+        },
+        "recyclabilityClass": {
+          "type": "string",
+          "enum": [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E"
+          ]
+        }
+      }
+    },
+    "supplyChainDetails": {
+      "type": "object",
+      "access": "restricted",
+      "properties": {
+        "spinningFactory": {
+          "type": "string"
+        },
+        "dyeingFactory": {
+          "type": "string"
+        },
+        "assemblyFactory": {
+          "type": "string"
+        }
       }
     }
   }
