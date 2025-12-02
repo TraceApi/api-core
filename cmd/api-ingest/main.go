@@ -45,7 +45,13 @@ func main() {
 	// 2a. Initialize Cache
 	redisClient := cache.NewRedisClient(cfg.RedisAddr)
 	redisStore := cache.NewRedisStore(redisClient)
-	authRepo := cache.NewRedisAuthRepository(redisClient)
+	authRepo := cache.NewRedisAuthRepository(redisClient, dbPool)
+
+	// 2b. Warmup Cache (Load API Keys)
+	log.Info("Warming up auth cache...")
+	if err := authRepo.Warmup(ctx); err != nil {
+		log.Warn("Failed to warmup auth cache", "error", err)
+	}
 
 	// 2b. Initialize Blob Storage
 	blobStore, err := s3.NewBlobStore(ctx, s3.Config{

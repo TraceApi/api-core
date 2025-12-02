@@ -42,8 +42,18 @@ func main() {
 	}
 	defer dbPool.Close()
 
+	// 2a. Initialize Cache
 	redisClient := cache.NewRedisClient(cfg.RedisAddr)
 	redisStore := cache.NewRedisStore(redisClient)
+	authRepo := cache.NewRedisAuthRepository(redisClient, dbPool)
+
+	// 2b. Warmup Cache (Load API Keys)
+	log.Info("Warming up auth cache...")
+	if err := authRepo.Warmup(ctx); err != nil {
+		log.Warn("Failed to warmup auth cache", "error", err)
+		// We don't exit fatal here, because maybe DB is empty or partial failure.
+		// But in a strict environment, maybe we should.
+	}
 
 	// Initialize Blob Storage
 	blobStore, err := s3.NewBlobStore(ctx, s3.Config{
@@ -60,8 +70,6 @@ func main() {
 	// Initialize Event Bus (Resolver doesn't publish, but service requires it)
 	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
 
-	redisAuth := cache.NewRedisAuthRepository(redisClient)
-
 	// 3. Wiring (Identical to Ingest, but we use different handlers)
 	repo := postgres.NewPassportRepository(dbPool)
 	svc, err := service.NewPassportService(repo, redisStore, blobStore, eventBus, log)
@@ -70,7 +78,7 @@ func main() {
 		return
 	}
 
-	handler := rest.NewResolverHandler(svc, redisAuth, log)
+	handler := rest.NewResolverHandler(svc, authRepo, log)
 
 	// 4. Router
 	r := chi.NewRouter()

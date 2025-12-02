@@ -51,7 +51,7 @@ func setupIntegrationServer(t *testing.T) (*httptest.Server, func()) {
 	// 2. Cache
 	redisClient := cache.NewRedisClient(cfg.RedisAddr)
 	redisStore := cache.NewRedisStore(redisClient)
-	authRepo := cache.NewRedisAuthRepository(redisClient)
+	authRepo := cache.NewRedisAuthRepository(redisClient, dbPool)
 
 	// 2b. Event Bus
 	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
