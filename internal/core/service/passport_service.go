@@ -36,13 +36,14 @@ var batterySchemaRaw string
 var textileSchemaRaw string
 
 type passportService struct {
-	repo      ports.PassportRepository
-	cache     ports.CacheRepository
-	blobStore ports.BlobStorage
-	eventBus  ports.EventBus
-	compiler  *jsonschema.Compiler
-	schemas   map[domain.ProductCategory]*jsonschema.Schema
-	log       *slog.Logger
+	repo             ports.PassportRepository
+	cache            ports.CacheRepository
+	blobStore        ports.BlobStorage
+	eventBus         ports.EventBus
+	compiler         *jsonschema.Compiler
+	schemas          map[domain.ProductCategory]*jsonschema.Schema
+	restrictedFields map[domain.ProductCategory][]string
+	log              *slog.Logger
 }
 
 // Ensure interface implementation
@@ -70,6 +71,21 @@ func NewPassportService(repo ports.PassportRepository, cache ports.CacheReposito
 		return nil, fmt.Errorf("failed to compile textile schema: %w", err)
 	}
 
+	// Parse Restricted Fields
+	restrictedFields := make(map[domain.ProductCategory][]string)
+
+	batRestricted, err := parseRestrictedFields(batterySchemaRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse restricted fields for battery: %w", err)
+	}
+	restrictedFields[domain.CategoryBattery] = batRestricted
+
+	texRestricted, err := parseRestrictedFields(textileSchemaRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse restricted fields for textile: %w", err)
+	}
+	restrictedFields[domain.CategoryTextile] = texRestricted
+
 	return &passportService{
 		repo:      repo,
 		cache:     cache,
@@ -80,8 +96,27 @@ func NewPassportService(repo ports.PassportRepository, cache ports.CacheReposito
 			domain.CategoryBattery: batterySchema,
 			domain.CategoryTextile: textileSchema,
 		},
-		log: log,
+		restrictedFields: restrictedFields,
+		log:              log,
 	}, nil
+}
+
+func parseRestrictedFields(rawSchema string) ([]string, error) {
+	var schema struct {
+		Properties map[string]struct {
+			Access string `json:"access"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(rawSchema), &schema); err != nil {
+		return nil, err
+	}
+	var restricted []string
+	for key, prop := range schema.Properties {
+		if prop.Access == "restricted" {
+			restricted = append(restricted, key)
+		}
+	}
+	return restricted, nil
 }
 
 func (s *passportService) CreatePassport(ctx context.Context, manufacturerID string, category domain.ProductCategory, payload []byte) (*domain.Passport, error) {
@@ -171,35 +206,67 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 
 func (s *passportService) GetPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {
 	cacheKey := fmt.Sprintf("passport:%s", id.String())
+	var passport *domain.Passport
 
 	// 1. FAST PATH: Check Redis
 	cachedJSON, err := s.cache.Get(ctx, cacheKey)
 	if err == nil {
-		// Cache Hit! Unmarshal and return.
 		var p domain.Passport
 		if jsonErr := json.Unmarshal([]byte(cachedJSON), &p); jsonErr == nil {
-			return &p, nil
+			passport = &p
+			s.log.Debug("Cache Hit", "id", id)
 		}
-		// If unmarshal fails, we ignore the cache and hit the DB (Auto-repair)
 	}
 
-	// 2. SLOW PATH: Hit Postgres
-	passport, err := s.repo.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
+	// 2. SLOW PATH: Hit Postgres (if not in cache)
+	if passport == nil {
+		p, err := s.repo.GetByID(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		passport = p
+
+		// 3. FILL CACHE: Save for next time (Full Data)
+		// We cache for 1 hour (or longer, since passports are immutable-ish)
+		if jsonBytes, jsonErr := json.Marshal(passport); jsonErr == nil {
+			// Run in goroutine so we don't block the response
+			go func() {
+				// Create a detached context so the cache set doesn't fail if the HTTP request cancels
+				_ = s.cache.Set(context.Background(), cacheKey, string(jsonBytes), 1*time.Hour)
+			}()
+		}
 	}
 
-	// 3. FILL CACHE: Save for next time
-	// We cache for 1 hour (or longer, since passports are immutable-ish)
-	if jsonBytes, jsonErr := json.Marshal(passport); jsonErr == nil {
-		// Run in goroutine so we don't block the response
-		go func() {
-			// Create a detached context so the cache set doesn't fail if the HTTP request cancels
-			_ = s.cache.Set(context.Background(), cacheKey, string(jsonBytes), 1*time.Hour)
-		}()
+	// 4. FILTERING (Public vs Restricted)
+	// This MUST run after retrieval (Cache OR DB) to ensure we don't leak secrets
+	viewContext, _ := ctx.Value(domain.ViewContextKey).(string)
+
+	if viewContext != domain.ViewContextRestricted {
+		s.filterAttributes(passport)
 	}
 
 	return passport, nil
+}
+
+func (s *passportService) filterAttributes(passport *domain.Passport) {
+	restricted, ok := s.restrictedFields[passport.ProductCategory]
+	if !ok || len(restricted) == 0 {
+		return
+	}
+
+	var attrs map[string]interface{}
+	if err := json.Unmarshal(passport.Attributes, &attrs); err != nil {
+		s.log.Warn("failed to unmarshal attributes for filtering", "error", err)
+		return
+	}
+
+	for _, field := range restricted {
+		delete(attrs, field)
+	}
+
+	if filtered, err := json.Marshal(attrs); err == nil {
+		passport.Attributes = json.RawMessage(filtered)
+	}
 }
 
 func (s *passportService) PublishPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error) {

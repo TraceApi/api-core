@@ -35,6 +35,14 @@ const (
 	StatusRevoked   PassportStatus = "REVOKED"   // Recalled or erroneous
 )
 
+type ContextKey string
+
+const (
+	ViewContextKey        ContextKey = "view_context"
+	ViewContextRestricted string     = "restricted"
+	ViewContextPublic     string     = "public"
+)
+
 // Passport is the "Master Envelope" that aligns with GS1 Digital Link.
 // This struct is mapped to your main Postgres table.
 type Passport struct {

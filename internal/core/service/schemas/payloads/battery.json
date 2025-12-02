@@ -3,59 +3,112 @@
   "$id": "https://api.trace-stack.io/schemas/payloads/battery.json",
   "title": "Battery Passport Payload",
   "type": "object",
-  "required": ["batteryModel", "chemistry", "ratedCapacity", "carbonFootprint", "materialComposition"],
+  "required": [
+    "batteryModel",
+    "chemistry",
+    "ratedCapacity",
+    "carbonFootprint",
+    "materialComposition"
+  ],
   "properties": {
-    "batteryModel": { "type": "string" },
-    "serialNumber": { "type": "string" },
-    "manufacturingPlace": { "type": "string" },
+    "batteryModel": {
+      "type": "string",
+      "access": "public"
+    },
+    "serialNumber": {
+      "type": "string",
+      "access": "public"
+    },
+    "manufacturingPlace": {
+      "type": "string",
+      "access": "public"
+    },
     "chemistry": {
       "type": "string",
-      "enum": ["LITHIUM_ION", "LITHIUM_IRON_PHOSPHATE", "NICKEL_METAL_HYDRIDE", "LEAD_ACID"],
-      "description": "Chemistry as defined in Annex VI"
+      "enum": [
+        "LITHIUM_ION",
+        "LITHIUM_IRON_PHOSPHATE",
+        "NICKEL_METAL_HYDRIDE",
+        "LEAD_ACID"
+      ],
+      "description": "Chemistry as defined in Annex VI",
+      "access": "public"
     },
     "ratedCapacity": {
       "type": "number",
-      "description": "Capacity in Ah (Ampere-hours) at standard conditions."
+      "description": "Capacity in Ah (Ampere-hours) at standard conditions.",
+      "access": "public"
     },
     "voltage": {
       "type": "number",
-      "description": "Nominal voltage in V."
+      "description": "Nominal voltage in V.",
+      "access": "public"
     },
     "weight": {
       "type": "number",
-      "description": "Weight in kg."
+      "description": "Weight in kg.",
+      "access": "public"
     },
     "carbonFootprint": {
       "type": "object",
-      "required": ["totalCarbonFootprint", "shareOfRenewables"],
+      "required": [
+        "totalCarbonFootprint",
+        "shareOfRenewables"
+      ],
+      "access": "public",
       "properties": {
-        "totalCarbonFootprint": { 
-          "type": "number", 
-          "description": "kg CO2 eq/kWh over lifecycle" 
+        "totalCarbonFootprint": {
+          "type": "number",
+          "description": "kg CO2 eq/kWh over lifecycle"
         },
-        "shareOfRenewables": { "type": "number", "minimum": 0, "maximum": 100 },
-        "declarationUrl": { "type": "string", "format": "uri" }
+        "shareOfRenewables": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "declarationUrl": {
+          "type": "string",
+          "format": "uri"
+        }
       }
     },
     "materialComposition": {
       "type": "array",
       "description": "Critical Raw Materials (CRM) declaration (Cobalt, Lithium, Nickel, Lead)",
+      "access": "public",
       "items": {
         "type": "object",
         "properties": {
-          "material": { "type": "string" },
-          "massPercentage": { "type": "number" },
-          "recycledContentPercentage": { "type": "number" }
+          "material": {
+            "type": "string"
+          },
+          "massPercentage": {
+            "type": "number"
+          },
+          "recycledContentPercentage": {
+            "type": "number"
+          }
         }
       }
     },
     "disassemblyInstructions": {
       "type": "object",
       "description": "Restricted Access Data for Recyclers",
+      "access": "restricted",
       "properties": {
-        "documentUrl": { "type": "string", "format": "uri" },
-        "safetyMeasures": { "type": "string" },
-        "toolsRequired": { "type": "array", "items": { "type": "string" } }
+        "documentUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "safetyMeasures": {
+          "type": "string"
+        },
+        "toolsRequired": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
       }
     }
   }

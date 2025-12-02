@@ -60,6 +60,8 @@ func main() {
 	// Initialize Event Bus (Resolver doesn't publish, but service requires it)
 	eventBus := bus.NewRedisEventBus(cfg.RedisAddr)
 
+	redisAuth := cache.NewRedisAuthRepository(redisClient)
+
 	// 3. Wiring (Identical to Ingest, but we use different handlers)
 	repo := postgres.NewPassportRepository(dbPool)
 	svc, err := service.NewPassportService(repo, redisStore, blobStore, eventBus, log)
@@ -68,7 +70,7 @@ func main() {
 		return
 	}
 
-	handler := rest.NewResolverHandler(svc, log)
+	handler := rest.NewResolverHandler(svc, redisAuth, log)
 
 	// 4. Router
 	r := chi.NewRouter()

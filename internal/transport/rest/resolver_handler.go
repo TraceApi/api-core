@@ -10,11 +10,16 @@
 package rest
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/TraceApi/api-core/internal/core/domain"
 
 	"github.com/TraceApi/api-core/internal/core/ports"
 	"github.com/go-chi/chi/v5"
@@ -23,12 +28,13 @@ import (
 )
 
 type ResolverHandler struct {
-	service ports.PassportService // We reuse the service for reading
-	log     *slog.Logger
+	service  ports.PassportService
+	authRepo ports.AuthRepository
+	log      *slog.Logger
 }
 
-func NewResolverHandler(s ports.PassportService, log *slog.Logger) *ResolverHandler {
-	return &ResolverHandler{service: s, log: log}
+func NewResolverHandler(s ports.PassportService, authRepo ports.AuthRepository, log *slog.Logger) *ResolverHandler {
+	return &ResolverHandler{service: s, authRepo: authRepo, log: log}
 }
 
 func (h *ResolverHandler) RegisterResolverRoutes(r chi.Router) {
@@ -45,10 +51,23 @@ func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// 1. Fetch Data (Using the Read method we added to the service implicitly via Repo)
-	// We need to expose a GetPassport method in the Service interface first!
-	// (We will do that in the next step)
-	passport, err := h.service.GetPassport(r.Context(), uid)
+	// 0. Determine Context (Public vs Restricted)
+	ctx := r.Context()
+	authHeader := r.Header.Get("Authorization")
+	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if strings.HasPrefix(tokenString, "traceapi_") {
+			hash := sha256.Sum256([]byte(tokenString))
+			apiKeyHash := hex.EncodeToString(hash[:])
+			_, valid, err := h.authRepo.ValidateKey(ctx, apiKeyHash)
+			if err == nil && valid {
+				ctx = context.WithValue(ctx, domain.ViewContextKey, domain.ViewContextRestricted)
+			}
+		}
+	}
+
+	// 1. Fetch Data
+	passport, err := h.service.GetPassport(ctx, uid)
 	if err != nil {
 		h.log.Warn("passport not found", "id", uid, "error", err)
 		http.Error(w, "Passport Not Found", http.StatusNotFound)
