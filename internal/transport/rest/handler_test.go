@@ -35,8 +35,8 @@ type MockPassportService struct {
 	mock.Mock
 }
 
-func (m *MockPassportService) CreatePassport(ctx context.Context, manufacturerID string, category domain.ProductCategory, payload []byte) (*domain.Passport, error) {
-	args := m.Called(ctx, manufacturerID, category, payload)
+func (m *MockPassportService) CreatePassport(ctx context.Context, manufacturerID string, manufacturerName string, category domain.ProductCategory, payload []byte) (*domain.Passport, error) {
+	args := m.Called(ctx, manufacturerID, manufacturerName, category, payload)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -87,7 +87,7 @@ func TestCreatePassport_Handler_Success(t *testing.T) {
 		ProductCategory: domain.CategoryBattery,
 		Status:          domain.StatusDraft,
 	}
-	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", domain.CategoryBattery, mock.Anything).Return(expectedPassport, nil)
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", "mfg-1", domain.CategoryBattery, mock.Anything).Return(expectedPassport, nil)
 
 	// Execute
 	rr := httptest.NewRecorder()
@@ -135,7 +135,7 @@ func TestCreatePassport_Handler_ServiceError(t *testing.T) {
 	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
 	req = req.WithContext(ctx)
 
-	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, domain.ErrInvalidInput)
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, domain.ErrInvalidInput)
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)
@@ -156,7 +156,7 @@ func TestCreatePassport_Handler_InternalError(t *testing.T) {
 	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
 	req = req.WithContext(ctx)
 
-	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, errors.New("db error"))
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", "mfg-1", domain.CategoryBattery, mock.Anything).Return(nil, errors.New("db error"))
 
 	rr := httptest.NewRecorder()
 	r.ServeHTTP(rr, req)

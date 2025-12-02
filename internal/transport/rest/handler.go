@@ -65,7 +65,10 @@ func (h *PassportHandler) CreatePassport(w http.ResponseWriter, r *http.Request)
 	defer r.Body.Close()
 
 	// 4. Call Service
-	passport, err := h.service.CreatePassport(r.Context(), manufacturerID, category, body)
+	// For now, we use the ID as the Name (e.g. "competitor-inc")
+	// In the future, we can look up the display name from the Auth Service
+	manufacturerName := manufacturerID
+	passport, err := h.service.CreatePassport(r.Context(), manufacturerID, manufacturerName, category, body)
 	if err != nil {
 		h.log.Error("failed to create passport", "error", err)
 

@@ -39,6 +39,7 @@ type ContextKey string
 
 const (
 	ViewContextKey        ContextKey = "view_context"
+	ViewerTenantIDKey     ContextKey = "viewer_tenant_id"
 	ViewContextRestricted string     = "restricted"
 	ViewContextPublic     string     = "public"
 )

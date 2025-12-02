@@ -67,9 +67,10 @@ func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request
 			// Case A: Raw API Key
 			hash := sha256.Sum256([]byte(tokenString))
 			apiKeyHash := hex.EncodeToString(hash[:])
-			_, valid, err := h.authRepo.ValidateKey(ctx, apiKeyHash)
+			tenantID, valid, err := h.authRepo.ValidateKey(ctx, apiKeyHash)
 			if err == nil && valid {
 				ctx = context.WithValue(ctx, domain.ViewContextKey, domain.ViewContextRestricted)
+				ctx = context.WithValue(ctx, domain.ViewerTenantIDKey, tenantID)
 			}
 		} else {
 			// Case B: JWT Token
@@ -82,6 +83,11 @@ func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request
 
 			if err == nil && token.Valid {
 				ctx = context.WithValue(ctx, domain.ViewContextKey, domain.ViewContextRestricted)
+				if claims, ok := token.Claims.(jwt.MapClaims); ok {
+					if sub, ok := claims["sub"].(string); ok {
+						ctx = context.WithValue(ctx, domain.ViewerTenantIDKey, sub)
+					}
+				}
 			}
 		}
 	}

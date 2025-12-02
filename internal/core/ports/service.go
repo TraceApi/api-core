@@ -19,7 +19,7 @@ import (
 type PassportService interface {
 	// CreatePassport takes raw JSON input and the intended category.
 	// It returns the created Passport (with ID) or a validation error.
-	CreatePassport(ctx context.Context, manufacturerID string, category domain.ProductCategory, payload []byte) (*domain.Passport, error)
+	CreatePassport(ctx context.Context, manufacturerID string, manufacturerName string, category domain.ProductCategory, payload []byte) (*domain.Passport, error)
 
 	GetPassport(ctx context.Context, id uuid.UUID) (*domain.Passport, error)
 

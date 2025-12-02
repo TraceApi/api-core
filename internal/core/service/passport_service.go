@@ -119,7 +119,7 @@ func parseRestrictedFields(rawSchema string) ([]string, error) {
 	return restricted, nil
 }
 
-func (s *passportService) CreatePassport(ctx context.Context, manufacturerID string, category domain.ProductCategory, payload []byte) (*domain.Passport, error) {
+func (s *passportService) CreatePassport(ctx context.Context, manufacturerID string, manufacturerName string, category domain.ProductCategory, payload []byte) (*domain.Passport, error) {
 	// 1. Idempotency Check
 	// Generate a hash of the raw payload + category + manufacturer
 	hasher := sha256.New()
@@ -168,7 +168,7 @@ func (s *passportService) CreatePassport(ctx context.Context, manufacturerID str
 		ProductCategory:  category,
 		Status:           domain.StatusDraft,
 		ManufacturerID:   manufacturerID,
-		ManufacturerName: "Unknown Manufacturer", // Placeholder until Auth Service
+		ManufacturerName: manufacturerName,
 		Attributes:       json.RawMessage(payload),
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -240,8 +240,14 @@ func (s *passportService) GetPassport(ctx context.Context, id uuid.UUID) (*domai
 	// 4. FILTERING (Public vs Restricted)
 	// This MUST run after retrieval (Cache OR DB) to ensure we don't leak secrets
 	viewContext, _ := ctx.Value(domain.ViewContextKey).(string)
+	viewerTenantID, _ := ctx.Value(domain.ViewerTenantIDKey).(string)
 
-	if viewContext != domain.ViewContextRestricted {
+	// Strict Ownership Check:
+	// Even if authenticated (Restricted Context), you can only see restricted data
+	// if you are the Manufacturer of this passport.
+	isOwner := (viewerTenantID == passport.ManufacturerID)
+
+	if viewContext != domain.ViewContextRestricted || !isOwner {
 		s.filterAttributes(passport)
 	}
 

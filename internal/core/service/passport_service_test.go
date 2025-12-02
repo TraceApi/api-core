@@ -138,7 +138,7 @@ func TestCreatePassport_Success(t *testing.T) {
 	mockBus.On("Publish", mock.Anything, "events:passport_created", mock.Anything).Return(nil)
 
 	// Execute
-	passport, err := svc.CreatePassport(ctx, manufacturerID, category, payloadBytes)
+	passport, err := svc.CreatePassport(ctx, manufacturerID, manufacturerID, category, payloadBytes)
 
 	// Assert
 	assert.NoError(t, err)
@@ -173,7 +173,7 @@ func TestCreatePassport_InvalidSchema(t *testing.T) {
 	mockCache.On("GetIdempotency", ctx, mock.Anything).Return("", errors.New("cache miss"))
 
 	// Execute
-	passport, err := svc.CreatePassport(ctx, "mfg-1", domain.CategoryBattery, payloadBytes)
+	passport, err := svc.CreatePassport(ctx, "mfg-1", "Manufacturer 1", domain.CategoryBattery, payloadBytes)
 
 	// Assertions
 	assert.Error(t, err)
@@ -202,7 +202,7 @@ func TestCreatePassport_IdempotencyHit(t *testing.T) {
 	mockRepo.On("GetByID", ctx, existingID).Return(existingPassport, nil)
 
 	// Execute
-	passport, err := svc.CreatePassport(ctx, "mfg-1", domain.CategoryBattery, []byte("{}"))
+	passport, err := svc.CreatePassport(ctx, "mfg-1", "Manufacturer 1", domain.CategoryBattery, []byte("{}"))
 
 	// Assertions
 	assert.NoError(t, err)
