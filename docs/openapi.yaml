@@ -128,6 +128,31 @@ paths:
                 type: string
                 format: binary
 
+  /auth/token:
+    post:
+      summary: Exchange API Key for JWT
+      description: Exchanges a long-lived opaque API Key for a short-lived JWT access token.
+      operationId: exchangeToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExchangeRequest'
+      responses:
+        '200':
+          description: Token generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExchangeResponse'
+        '400':
+          description: Invalid request or missing API Key
+        '401':
+          description: Invalid API Key
+        '500':
+          description: Internal server error
+
 components:
   securitySchemes:
     bearerAuth:
@@ -168,3 +193,19 @@ components:
           type: string
         storage_location:
           type: string
+
+    ExchangeRequest:
+      type: object
+      required:
+        - apiKey
+      properties:
+        apiKey:
+          type: string
+          description: The opaque API Key (starts with traceapi_)
+
+    ExchangeResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: The JWT access token

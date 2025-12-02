@@ -79,6 +79,7 @@ func TestCreatePassport_Handler_Success(t *testing.T) {
 
 	// Inject Auth Context (Simulate Middleware)
 	ctx := context.WithValue(req.Context(), middleware.ManufacturerIDKey, "mfg-1")
+	ctx = context.WithValue(ctx, middleware.ManufacturerNameKey, "Test Manufacturer Inc.")
 	req = req.WithContext(ctx)
 
 	// Expectations
@@ -87,7 +88,7 @@ func TestCreatePassport_Handler_Success(t *testing.T) {
 		ProductCategory: domain.CategoryBattery,
 		Status:          domain.StatusDraft,
 	}
-	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", "mfg-1", domain.CategoryBattery, mock.Anything).Return(expectedPassport, nil)
+	mockSvc.On("CreatePassport", mock.Anything, "mfg-1", "Test Manufacturer Inc.", domain.CategoryBattery, mock.Anything).Return(expectedPassport, nil)
 
 	// Execute
 	rr := httptest.NewRecorder()

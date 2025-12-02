@@ -12,6 +12,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/TraceApi/api-core/internal/core/ports"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -92,4 +93,33 @@ func (r *RedisAuthRepository) GetTenantState(ctx context.Context, tenantID strin
 		return "ACTIVE", nil
 	}
 	return val, err
+}
+
+func (r *RedisAuthRepository) GetTenantName(ctx context.Context, tenantID string) (string, error) {
+	// 1. Check Redis Cache
+	key := fmt.Sprintf("tenant:name:%s", tenantID)
+	val, err := r.client.Get(ctx, key).Result()
+	if err == nil {
+		return val, nil
+	}
+	if err != redis.Nil {
+		// Log error but fall through to DB
+		// In a real app, we might want to log this
+	}
+
+	// 2. Fetch from DB
+	// We assume a "tenants" table exists with "org_name"
+	query := `SELECT org_name FROM tenants WHERE id = $1`
+	var orgName string
+	if err := r.db.QueryRow(ctx, query, tenantID).Scan(&orgName); err != nil {
+		return "", fmt.Errorf("failed to fetch tenant name: %w", err)
+	}
+
+	// 3. Cache in Redis (Long TTL, e.g., 24 hours)
+	// We use a background context to ensure cache set doesn't fail if request is canceled
+	go func() {
+		_ = r.client.Set(context.Background(), key, orgName, 24*time.Hour).Err()
+	}()
+
+	return orgName, nil
 }

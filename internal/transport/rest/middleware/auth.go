@@ -25,7 +25,8 @@ import (
 type contextKey string
 
 const (
-	ManufacturerIDKey contextKey = "manufacturer_id"
+	ManufacturerIDKey   contextKey = "manufacturer_id"
+	ManufacturerNameKey contextKey = "manufacturer_name"
 )
 
 func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *slog.Logger) func(http.Handler) http.Handler {
@@ -120,9 +121,23 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 			}
 
 			// ---------------------------------------------------------
-			// PHASE 3: EXECUTION
+			// PHASE 3: ENRICHMENT (Fetch Name)
+			// ---------------------------------------------------------
+			name, err := authRepo.GetTenantName(r.Context(), tenantID)
+			if err != nil {
+				// Non-critical, fallback to ID
+				log.Warn("failed to fetch tenant name", "error", err)
+				name = tenantID
+			}
+			if name == "" {
+				name = tenantID
+			}
+
+			// ---------------------------------------------------------
+			// PHASE 4: EXECUTION
 			// ---------------------------------------------------------
 			ctx := context.WithValue(r.Context(), ManufacturerIDKey, tenantID)
+			ctx = context.WithValue(ctx, ManufacturerNameKey, name)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -132,4 +147,10 @@ func HybridAuthMiddleware(jwtSecret string, authRepo ports.AuthRepository, log *
 func GetManufacturerID(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(ManufacturerIDKey).(string)
 	return id, ok
+}
+
+// GetManufacturerName retrieves the Name from context
+func GetManufacturerName(ctx context.Context) (string, bool) {
+	name, ok := ctx.Value(ManufacturerNameKey).(string)
+	return name, ok
 }

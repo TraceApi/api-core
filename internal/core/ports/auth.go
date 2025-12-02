@@ -14,4 +14,5 @@ import "context"
 type AuthRepository interface {
 	ValidateKey(ctx context.Context, apiKeyHash string) (tenantID string, valid bool, err error)
 	GetTenantState(ctx context.Context, tenantID string) (state string, err error)
+	GetTenantName(ctx context.Context, tenantID string) (name string, err error)
 }

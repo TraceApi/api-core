@@ -41,6 +41,11 @@ func (m *MockAuthRepository) GetTenantState(ctx context.Context, tenantID string
 	return args.String(0), args.Error(1)
 }
 
+func (m *MockAuthRepository) GetTenantName(ctx context.Context, tenantID string) (string, error) {
+	args := m.Called(ctx, tenantID)
+	return args.String(0), args.Error(1)
+}
+
 func TestHybridAuthMiddleware(t *testing.T) {
 	secret := "test-secret"
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
@@ -89,6 +94,7 @@ func TestHybridAuthMiddleware(t *testing.T) {
 			authHeader: "Bearer " + createToken(secret, "mfg-jwt", time.Hour),
 			setupMock: func() {
 				mockRepo.On("GetTenantState", mock.Anything, "mfg-jwt").Return("ACTIVE", nil)
+				mockRepo.On("GetTenantName", mock.Anything, "mfg-jwt").Return("Manufacturer JWT", nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkContext:   true,
@@ -100,6 +106,7 @@ func TestHybridAuthMiddleware(t *testing.T) {
 			setupMock: func() {
 				mockRepo.On("ValidateKey", mock.Anything, createKeyHash("traceapi_my-api-key")).Return("mfg-api", true, nil)
 				mockRepo.On("GetTenantState", mock.Anything, "mfg-api").Return("ACTIVE", nil)
+				mockRepo.On("GetTenantName", mock.Anything, "mfg-api").Return("Manufacturer API", nil)
 			},
 			expectedStatus: http.StatusOK,
 			checkContext:   true,
