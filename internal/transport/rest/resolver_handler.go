@@ -19,10 +19,14 @@ import (
 	"net/http"
 	"strings"
 
+	"time"
+
+	"github.com/TraceApi/api-core/internal/config"
 	"github.com/TraceApi/api-core/internal/core/domain"
 
 	"github.com/TraceApi/api-core/internal/core/ports"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/skip2/go-qrcode"
 )
@@ -31,16 +35,18 @@ type ResolverHandler struct {
 	service  ports.PassportService
 	authRepo ports.AuthRepository
 	log      *slog.Logger
+	cfg      *config.Config
 }
 
-func NewResolverHandler(s ports.PassportService, authRepo ports.AuthRepository, log *slog.Logger) *ResolverHandler {
-	return &ResolverHandler{service: s, authRepo: authRepo, log: log}
+func NewResolverHandler(s ports.PassportService, authRepo ports.AuthRepository, log *slog.Logger, cfg *config.Config) *ResolverHandler {
+	return &ResolverHandler{service: s, authRepo: authRepo, log: log, cfg: cfg}
 }
 
 func (h *ResolverHandler) RegisterResolverRoutes(r chi.Router) {
 	// The Short URL route (e.g., tapi.eu/r/123)
 	r.Get("/r/{id}", h.ResolvePassport)
 	r.Get("/r/{id}/qr", h.GetQRCode)
+	r.Post("/auth/token", h.ExchangeToken)
 }
 
 func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request) {
@@ -56,11 +62,25 @@ func (h *ResolverHandler) ResolvePassport(w http.ResponseWriter, r *http.Request
 	authHeader := r.Header.Get("Authorization")
 	if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
 		if strings.HasPrefix(tokenString, "traceapi_") {
+			// Case A: Raw API Key
 			hash := sha256.Sum256([]byte(tokenString))
 			apiKeyHash := hex.EncodeToString(hash[:])
 			_, valid, err := h.authRepo.ValidateKey(ctx, apiKeyHash)
 			if err == nil && valid {
+				ctx = context.WithValue(ctx, domain.ViewContextKey, domain.ViewContextRestricted)
+			}
+		} else {
+			// Case B: JWT Token
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				return []byte(h.cfg.JWTSecret), nil
+			})
+
+			if err == nil && token.Valid {
 				ctx = context.WithValue(ctx, domain.ViewContextKey, domain.ViewContextRestricted)
 			}
 		}
@@ -157,4 +177,60 @@ func (h *ResolverHandler) GetQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 	w.Header().Set("Content-Type", "image/png")
 	w.Write(png)
+}
+
+type ExchangeRequest struct {
+	APIKey string `json:"apiKey"`
+}
+
+type ExchangeResponse struct {
+	Token string `json:"token"`
+}
+
+func (h *ResolverHandler) ExchangeToken(w http.ResponseWriter, r *http.Request) {
+	var req ExchangeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.APIKey == "" {
+		http.Error(w, "API Key is required", http.StatusBadRequest)
+		return
+	}
+
+	// 1. Validate API Key
+	hash := sha256.Sum256([]byte(req.APIKey))
+	apiKeyHash := hex.EncodeToString(hash[:])
+
+	tenantID, valid, err := h.authRepo.ValidateKey(r.Context(), apiKeyHash)
+	if err != nil {
+		h.log.Error("Failed to validate key", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	if !valid {
+		http.Error(w, "Invalid API Key", http.StatusUnauthorized)
+		return
+	}
+
+	// 2. Generate JWT
+	claims := jwt.MapClaims{
+		"sub": tenantID,
+		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(1 * time.Hour).Unix(), // 1 Hour Expiration
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(h.cfg.JWTSecret))
+	if err != nil {
+		h.log.Error("Failed to sign token", "error", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Return Token
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(ExchangeResponse{Token: tokenString})
 }

@@ -24,6 +24,7 @@ import (
 	"github.com/TraceApi/api-core/internal/transport/rest"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -78,7 +79,7 @@ func main() {
 		return
 	}
 
-	handler := rest.NewResolverHandler(svc, authRepo, log)
+	handler := rest.NewResolverHandler(svc, authRepo, log, cfg)
 
 	// 4. Router
 	r := chi.NewRouter()
@@ -90,6 +91,19 @@ func main() {
 	// This protects the application layer from simple flooding.
 	// For massive DDoS, rely on Cloudflare/WAF.
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
+
+	// CORS (Dev Only)
+	if !cfg.IsProduction() {
+		log.Info("Enabling CORS for Development")
+		r.Use(cors.Handler(cors.Options{
+			AllowedOrigins:   []string{"http://localhost:3000"},
+			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+			ExposedHeaders:   []string{"Link"},
+			AllowCredentials: true,
+			MaxAge:           300, // Maximum value not ignored by any of major browsers
+		}))
+	}
 
 	// Public Routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
