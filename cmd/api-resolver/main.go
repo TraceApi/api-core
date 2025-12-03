@@ -94,18 +94,16 @@ func main() {
 	// For massive DDoS, rely on Cloudflare/WAF.
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 
-	// CORS (Dev Only)
-	if !cfg.IsProduction() {
-		log.Info("Enabling CORS for Development")
-		r.Use(cors.Handler(cors.Options{
-			AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001"},
-			AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-			AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-			ExposedHeaders:   []string{"Link"},
-			AllowCredentials: true,
-			MaxAge:           300, // Maximum value not ignored by any of major browsers
-		}))
-	}
+	// CORS
+	log.Info("Enabling CORS")
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://traceapi.eu", "https://console.traceapi.eu"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Public Routes
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
