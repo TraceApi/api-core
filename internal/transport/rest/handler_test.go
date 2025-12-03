@@ -59,6 +59,22 @@ func (m *MockPassportService) PublishPassport(ctx context.Context, id uuid.UUID)
 	return args.Get(0).(*domain.Passport), args.Error(1)
 }
 
+func (m *MockPassportService) ListPassports(ctx context.Context, manufacturerID string) ([]*domain.Passport, error) {
+	args := m.Called(ctx, manufacturerID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Passport), args.Error(1)
+}
+
+func (m *MockPassportService) UpdatePassport(ctx context.Context, id uuid.UUID, manufacturerID string, payload []byte) (*domain.Passport, error) {
+	args := m.Called(ctx, id, manufacturerID, payload)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Passport), args.Error(1)
+}
+
 // --- Tests ---
 
 func TestCreatePassport_Handler_Success(t *testing.T) {
