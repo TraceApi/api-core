@@ -97,7 +97,7 @@ func main() {
 	// CORS
 	log.Info("Enabling CORS")
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://traceapi.eu", "https://console.traceapi.eu"},
+		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:3001", "https://traceapi.eu", "https://console.traceapi.eu", "https://portal.traceapi.eu"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
