@@ -2,8 +2,39 @@ APP_NAME=tracestack
 VERSION=$(shell git describe --tags --always --dirty)
 BUILD_DATE=$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
+# Docker Configuration
+IMAGE_INGEST=ghcr.io/traceapi/api-core-ingest:latest
+IMAGE_RESOLVER=ghcr.io/traceapi/api-core-resolver:latest
+BUILD_CONTEXT=.
+
 # Go commands
-.PHONY: all build run test clean
+.PHONY: all build run test clean build-ingest build-resolver push push-ingest push-resolver deploy
+
+build: build-ingest build-resolver
+
+build-ingest:
+	@echo "Building Ingest API Docker Image..."
+	docker build \
+		-f deploy/ingest.Dockerfile \
+		-t $(IMAGE_INGEST) \
+		$(BUILD_CONTEXT)
+
+build-resolver:
+	@echo "Building Resolver API Docker Image..."
+	docker build \
+		-f deploy/resolver.Dockerfile \
+		-t $(IMAGE_RESOLVER) \
+		$(BUILD_CONTEXT)
+
+push: push-ingest push-resolver
+
+push-ingest:
+	docker push $(IMAGE_INGEST)
+
+push-resolver:
+	docker push $(IMAGE_RESOLVER)
+
+deploy: build push
 
 up: ## Start the dev infrastructure (DB, Redis, S3)
 	docker-compose up -d
